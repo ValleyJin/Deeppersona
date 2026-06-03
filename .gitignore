@@ -1,6 +1,9 @@
 # 大文件
 social_simulation_ca/data/survey.csv
 
+# Generated output
+output/
+
 # Python
 __pycache__/
 *.py[cod]

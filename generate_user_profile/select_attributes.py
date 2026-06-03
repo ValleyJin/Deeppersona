@@ -901,9 +901,9 @@ def save_results(user_profile: Dict, selected_paths: List[str], output_dir: str 
         logger.error(f"保存结果时出错: {e}")
         raise
 
-# 示例：在生成用户基本信息和属性列表的函数中自动调用保存（请根据实际情况将此调用添加到合适位置）
-user_profile = generate_user_profile()
-selected_paths = get_selected_attributes(user_profile)
-save_results(user_profile, selected_paths)
-
 # 此文件只供其他文件导入使用
+if __name__ == "__main__":
+    # 示例：在生成用户基本信息和属性列表的函数中自动调用保存
+    user_profile = generate_user_profile()
+    selected_paths = get_selected_attributes(user_profile)
+    save_results(user_profile, selected_paths)
