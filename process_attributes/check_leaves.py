@@ -7,12 +7,17 @@ from openai import OpenAI
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # 初始化sentence transformer模型
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # 设置OpenAI客户端
-OPENAI_API_KEY = "OPENAI_API_KEY"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env (see .env.example).")
 GPT_MODEL = "gpt-4o"
 
 client = OpenAI(

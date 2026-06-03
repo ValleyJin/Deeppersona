@@ -11,17 +11,20 @@ This module contains the following main features:
 import os
 import json
 from openai import OpenAI
+from dotenv import load_dotenv
 from typing import List, Dict, Optional, Any, Union, Tuple
 
-# API Configuration
-# Note: In production environment, API keys should be read from environment variables or config files
+# Load .env from the repo root (or any parent of this file)
+load_dotenv()
 
 # GeoNames API Configuration
-GEONAMES_USERNAME = "demo"  # Replace with your GeoNames username
+GEONAMES_USERNAME = os.getenv("GEONAMES_USERNAME", "demo")
 GEONAMES_API_BASE = "http://api.geonames.org"
 
 # OpenAI API Configuration
-OPENAI_API_KEY = "OPENAI_API_KEY"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env (see .env.example).")
 
 # GPT model version to use
 GPT_MODEL = "gpt-4.1-mini"

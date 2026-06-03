@@ -3,9 +3,14 @@ import time
 import os
 from typing import Dict
 from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # OpenAI API Settings
-OPENAI_API_KEY = "OPENAI_API_KEY"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env (see .env.example).")
 
 GPT_MODEL = "gpt-4o"
 

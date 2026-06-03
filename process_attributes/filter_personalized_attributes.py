@@ -2,9 +2,14 @@ import json
 from openai import OpenAI
 import os
 from typing import Dict, List, Tuple
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # OpenAI API Settings
-OPENAI_API_KEY = "OPENAI_API_KEY"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env (see .env.example).")
 GPT_MODEL = "gpt-4o"
 
 def check_last_segment(client: OpenAI, segment: str) -> bool:
