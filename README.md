@@ -27,6 +27,8 @@
   <img src="https://img.shields.io/badge/uniqueness-+44%25-EC4899" alt="Uniqueness">
 </p>
 
+> **Note:** This is a personal fork of [thzva/Deeppersona](https://github.com/thzva/Deeppersona) maintained by [@ValleyJin](https://github.com/ValleyJin). Local changes include `.env`-based secret loading. All credit for the underlying research and original implementation goes to the original authors — please cite the paper below if you use this work.
+
 **DeepPersona** is a scalable generative engine for synthesizing narrative-complete synthetic personas. Built on the largest-ever human-attribute taxonomy mined from real ChatGPT conversations, it produces personas that are **two orders of magnitude deeper** than prior work — hundreds of structured attributes, ~1 MB of coherent narrative text, ready for personalization, social simulation, and human-AI alignment research.
 
 <p align="center">
