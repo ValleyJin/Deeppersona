@@ -1,11 +1,14 @@
 import json
 import time
 import os
+from pathlib import Path
 from typing import Dict
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+TEMPLATE_PATH = Path(__file__).resolve().parent / "template.json"
 
 # OpenAI API Settings
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -22,7 +25,7 @@ class PersonalizedAttributeExtractor:
             api_key=OPENAI_API_KEY,
         )
         # Load template categories
-        with open('/home/zhou/persona/dataset/3.20/template.json', 'r') as f:
+        with open(TEMPLATE_PATH, 'r') as f:
             template_data = json.load(f)
             self.persona_categories = template_data['persona_categories']
 

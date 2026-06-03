@@ -364,9 +364,12 @@ def get_all_paths(d: dict, current_path: str = "") -> List[str]:
 
 def main():
     print("开始处理...")
-    input_file = "/home/zhou/persona/src/process_attributes_test/2.24/outputs/run_20250326_125810/attributes_merged.json"
-    output_file = os.path.join(os.path.dirname(input_file), "filtered_attributes1.json")
-    log_file = os.path.join(os.path.dirname(input_file), "filter_log1.txt")
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    input_file = os.path.join(repo_root, "data", "attributes_merged.json")
+    output_dir = os.path.join(repo_root, "output")
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, "filtered_attributes1.json")
+    log_file = os.path.join(output_dir, "filter_log1.txt")
     
     try:
         print("读取输入文件...")

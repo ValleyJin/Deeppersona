@@ -681,9 +681,9 @@ def generate_multiple_profiles(num_rounds: int = 8) -> None:
     
     # 获取项目根目录
     project_root = get_project_root()
-    
+
     # 创建输出目录
-    output_dir = "/home/zhou/deeppersona/generate_user_profile_final/output"
+    output_dir = os.path.join(project_root, "output")
     os.makedirs(output_dir, exist_ok=True)
     
     # 定义每个档案的属性数量

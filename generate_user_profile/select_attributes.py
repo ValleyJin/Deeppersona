@@ -55,10 +55,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 属性数据集路径
-ATTRIBUTES_PATH = "/home/zhou/deeppersona/generate_user_profile_test/data/large_attributes.json"  # 属性数据集路径
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+ATTRIBUTES_PATH = str(_REPO_ROOT / "data" / "large_attributes.json")  # 属性数据集路径
 
 # 向量数据库路径
-EMBEDDINGS_PATH = "/home/zhou/deeppersona/generate_user_profile_test/data/attribute_embeddings.pkl"  # 属性嵌入向量路径
+EMBEDDINGS_PATH = str(_REPO_ROOT / "data" / "attribute_embeddings.pkl")  # 属性嵌入向量路径
 
 # 默认模型来自配置
 DEFAULT_MODEL = GPT_MODEL
@@ -866,14 +867,16 @@ def build_nested_dict(paths: List[str]) -> Dict:
             current = current[part]
     return result
 
-def save_results(user_profile: Dict, selected_paths: List[str], output_dir: str = '/home/zhou/persona/generate_user_profile/output') -> None:
+def save_results(user_profile: Dict, selected_paths: List[str], output_dir: str = None) -> None:
     """
     保存用户配置文件和选定的属性路径到文件
     参数：
         user_profile: 用户配置文件
         selected_paths: 选定的属性路径 (列表形式)
-        output_dir: 输出目录（默认为 '/home/zhou/persona/generate_user_profile/output'）
+        output_dir: 输出目录（默认为 repo 루트의 'output/' 디렉토리）
     """
+    if output_dir is None:
+        output_dir = str(_REPO_ROOT / "output")
     try:
         from pathlib import Path
         import json

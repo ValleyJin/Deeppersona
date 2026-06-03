@@ -1,10 +1,13 @@
 import json
 from openai import OpenAI
 import os
+from pathlib import Path
 from typing import Dict, List, Tuple
 from dotenv import load_dotenv
 
 load_dotenv()
+
+TEMPLATE_PATH = Path(__file__).resolve().parent / "template.json"
 
 # OpenAI API Settings
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -52,7 +55,7 @@ Return only: true or false"""
 class PersonalizedAttributeAnalyzer:
     def __init__(self):
         # 读取模板文件中的一级属性
-        with open('/home/zhou/persona/dataset/2.7/template.json', 'r') as f:
+        with open(TEMPLATE_PATH, 'r') as f:
             template = json.load(f)
             self.valid_categories = list(template['persona_categories'])
     
