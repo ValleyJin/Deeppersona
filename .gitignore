@@ -4,6 +4,9 @@ social_simulation_ca/data/survey.csv
 # Generated output
 output/
 
+# Local backups of replaced data files
+*.broken
+
 # Python
 __pycache__/
 *.py[cod]
