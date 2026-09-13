@@ -99,10 +99,10 @@
     \begin{column}{0.5\textwidth}
       \small\textbf{핵심 숫자(이 fork 실측)}
       \begin{itemize}
-        \item \pc{large\_attributes.json}: \alert{leaf 2,297}개
+        \item \pc{large\_attributes.json}: \alert{leaf 2,297}개 (=값 채우는 슬롯)
         \item top-level \alert{19개}(정규 12 + 중복 7)
         \item 최대 깊이 5단계
-        \item 논문 원본 트리: 8,496 노드
+        \item 논문 트리 \alert{8,496 노드} = \emph{전 계층}(중간 폴더 포함), \alert{잎만} 값을 받음
       \end{itemize}
     \end{column}
   \end{columns}
@@ -257,7 +257,7 @@ Personalization Reason: {reason}
 Output Format: { "attributes": ["attributeA1.levelA2.levelA3", ...] }
 \end{lstlisting}
   \begin{itemize}\footnotesize
-    \item \textbf{입력}: 한 (질문, 이유) 쌍 — 실제 사용자–ChatGPT 대화에서 나온 것.
+    \item \textbf{입력}: 한 (질문, 이유) 쌍 — 실사용 대화 \alert{Puffin·prefeval·HiCUPID}(약 6.4만 대화)에서 GPT-4.1이 골라낸 \alert{6.2만 개인화 QA}.
     \item \textbf{제약 1}: 모든 속성은 \alert{3단계 \pc{X.Y.Z}} 형식. (트리 깊이를 강제)
     \item \textbf{제약 2}: 1단계(맨 앞)는 반드시 \pc{template.json}의 \alert{12개 카테고리 중 하나}.
     \item \textbf{지시}: "너무 구체적이지 말고 \emph{일반적·상위}" — 브랜드/제품 배제(조건 ④).
