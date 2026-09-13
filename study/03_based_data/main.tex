@@ -1,0 +1,283 @@
+% !TEX program = xelatex
+% DeepPersona 코드 학습교재 — 모듈 03: 시드/앵커 코어 (based_data.py, Step 1)
+\documentclass[aspectratio=169,10pt]{beamer}
+\usetheme{metropolis}
+\metroset{block=fill,numbering=fraction,progressbar=frametitle,sectionpage=progressbar}
+\usepackage{kotex}
+\usepackage{fontspec}
+\setmainhangulfont{Apple SD Gothic Neo}
+\setsanshangulfont{Apple SD Gothic Neo}
+\setmonofont{D2Coding}
+\usepackage{booktabs}\usepackage{array}\usepackage{graphicx}\usepackage{amssymb}\usepackage{amsmath}
+\usepackage{tikz}\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usepackage{listings}
+
+\definecolor{accent}{HTML}{0E7C7B}\definecolor{navy}{HTML}{004191}\definecolor{orange}{HTML}{F97316}
+\definecolor{ink}{HTML}{20242A}\definecolor{muted}{HTML}{5A6472}\definecolor{blockbg}{HTML}{EDF1F6}
+\definecolor{codebg}{HTML}{E7ECF3}\definecolor{kw}{HTML}{0D6E6E}\definecolor{str}{HTML}{A8410F}\definecolor{com}{HTML}{5A6472}
+\setbeamercolor{progress bar}{fg=accent}\setbeamercolor{title separator}{fg=accent}\setbeamercolor{frametitle}{bg=accent}
+\setbeamercolor{alerted text}{fg=orange}\setbeamercolor{block title}{bg=blockbg,fg=ink}\setbeamercolor{block body}{bg=blockbg!55,fg=ink}
+
+% 정책 §4.1: 배너 여백 매크로 내장 — 위 0.6em, 아래 1.15em
+\newcommand{\lead}[1]{\vspace*{0.6em}{\setlength{\fboxsep}{9pt}\noindent\colorbox{accent!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textcolor{accent}{\textbf{한눈에}}\hspace{0.6em}#1}}}\par\vspace{1.15em}}
+\newcommand{\intu}[1]{\vspace*{0.2em}{\setlength{\fboxsep}{7pt}\noindent\colorbox{navy!8}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textcolor{navy}{\textbf{쉽게 말하면}}\hspace{0.6em}#1}}}\par\vspace{0.5em}}
+\newcommand{\srcnote}[1]{\vspace{0.35em}\par{\footnotesize\color{navy}$\blacktriangleright$~#1}}
+\newcommand{\pc}[1]{\tikz[baseline=(pcb.base)]{\node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize #1};}}
+\newcommand{\origfig}[3]{\IfFileExists{#1}{\begin{center}\includegraphics[height=#2]{#1}\\[2pt]{\scriptsize\color{muted}#3}\end{center}}{\begin{center}\setlength{\fboxsep}{8pt}\fbox{\parbox{0.82\textwidth}{\centering\footnotesize\color{muted}[원본 그림 자산 없음 — 저작권상 저장소 미포함]\\[2pt]\texttt{#1}\\[2pt]#3}}\end{center}}}
+\lstdefinestyle{py}{basicstyle=\ttfamily\scriptsize,backgroundcolor=\color{codebg!55},keywordstyle=\color{kw}\bfseries,stringstyle=\color{str},commentstyle=\color{com}\itshape,language=Python,showstringspaces=false,breaklines=true,frame=leftline,framerule=1.4pt,rulecolor=\color{accent},xleftmargin=12pt,aboveskip=3pt,belowskip=2pt,tabsize=2}
+
+\title{DeepPersona 코드 학습교재}
+\subtitle{모듈 03 — 시드/앵커 코어: \texttt{based\_data.py} (Step 1)}
+\author{학습 정리 덱 (Claude와 함께)}
+\institute{원저: Wang et al., \textit{DeepPersona} (arXiv:2511.07338) · 논문 \S3.2}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{frame}{이 모듈의 목표}
+  \lead{트리를 걷기 전에 필요한 \alert{시드 인물(앵커)}을 만든다 — 이 시드가 이후 모든 선택·생성의 \emph{뿌리}.}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \small\textbf{얻는 것}
+      \begin{itemize}
+        \item 왜 \emph{코어를 먼저 고정}하나(§3.2)
+        \item \alert{bias-free}(테이블) vs \alert{LLM}(생성)의 구분
+        \item 시드 \emph{의존성 체인}(인구통계$\to$이야기$\to$취미)
+        \item 각 함수 \alert{코드블록 + 줄별 설명}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \small\textbf{핵심 통찰}
+      \begin{itemize}
+        \item 나이·성별·위치·직업 = \alert{LLM 안 씀}(편향 방지)
+        \item 가치관 유형을 \alert{랜덤(긍/부/중)}으로 강제 $\to$ 낙관 편향 차단
+        \item 취미는 이야기에서 \alert{추론}(추출 아님)
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \srcnote{이 시드가 모듈 04의 임베딩 입력, 모듈 05의 값 생성 맥락이 된다.}
+\end{frame}
+
+\begin{frame}{순서}\tableofcontents\end{frame}
+
+% ============================================================
+\section{1. 왜 코어를 먼저 고정하나}
+% ============================================================
+\begin{frame}{안정된 코어를 \alert{앵커}로 박는다}
+  \intu{집을 지을 때 기둥부터 세우듯, 페르소나도 흔들리지 않는 코어(나이·직업·가치관·이야기)를 먼저 정한다.}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{논문 \S3.2 "Anchor a stable core"}
+      \begin{itemize}\small
+        \item 먼저 소수의 코어를 인스턴스화:\\ 나이·위치·직업·가치관·인생태도·인생이야기·취미
+        \item 이걸 고정하면 selector가 \emph{말이 안 되는 영역으로 방황}하지 않음
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{block}{코어가 없으면?}
+        LLM이 매 슬롯을 독립적으로 채워 \emph{앞뒤가 안 맞는} 인물(30세인데 은퇴, 어부인데 도시 전문직)이 나옴.
+      \end{block}
+      \begin{block}{코어가 있으면}
+        이후 200개 슬롯이 모두 이 코어에 \emph{조건부}로 생성 $\to$ 일관성.
+      \end{block}
+    \end{column}
+  \end{columns}
+  \lead{\pc{based\_data.py}의 8개 함수가 바로 이 \alert{코어(=Step 1 시드)}를 만든다.}
+\end{frame}
+
+% ============================================================
+\section{2. bias-free vs LLM}
+% ============================================================
+\begin{frame}{두 종류의 값 — \alert{누가 정하는가}}
+  \intu{인구통계는 "주사위(랜덤 테이블)", 성격·이야기는 "작가(LLM)". 섞지 않는 게 핵심.}
+  \begin{center}
+  \renewcommand{\arraystretch}{1.1}\scriptsize
+  \begin{tabular}{@{}p{0.26\textwidth} p{0.30\textwidth} p{0.36\textwidth}@{}}
+    \toprule
+    \textbf{항목} & \textbf{만드는 방법} & \textbf{왜 그렇게} \\
+    \midrule
+    나이·성별 & \pc{random}(범위/균등) & LLM은 특정 나이·성별에 쏠림 \\
+    위치(국가·도시) & \pc{GeoNames} DB 랜덤 & 실재 도시 $\to$ 현실성 \\
+    직업 & \pc{occupations.json} 랜덤 & 다수문화 기본값 편중 방지 \\
+    \midrule
+    가치관·태도 & \alert{LLM} + 랜덤 유형 & 인구통계에 \emph{조건부} 생성 \\
+    인생이야기·취미 & \alert{LLM} & 서사적 깊이는 LLM만 가능 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \lead{"\alert{Bias-free value assignment}": 나이·직업·위치는 \emph{LLM이 아닌 테이블}에서 뽑아 편향을 막는다.}
+\end{frame}
+
+\begin{frame}{시드 생성 \alert{의존성 체인} — 순서가 중요하다}
+  \intu{앞 단계의 결과가 다음 단계의 입력이 된다. 그래서 가치관에 맞는 이야기, 이야기에 맞는 취미가 나온다.}
+  \begin{center}
+  \begin{tikzpicture}[font=\scriptsize,>=Latex,
+      d/.style={draw=navy,fill=navy!8,rounded corners=2pt,align=center,inner sep=2.5pt,text width=4.8em,minimum height=1.8em},
+      l/.style={draw=accent,fill=blockbg,rounded corners=2pt,align=center,inner sep=2.5pt,text width=4.8em,minimum height=1.8em}]
+    \node[d] (a) {나이·성별\\{\tiny random}};
+    \node[d,right=0.45cm of a] (loc) {위치\\{\tiny GeoNames}};
+    \node[d,right=0.45cm of loc] (job) {직업\\{\tiny 테이블}};
+    \node[l,right=0.6cm of job] (val) {가치관\\{\tiny LLM}};
+    \node[l,below=0.5cm of val] (att) {인생태도\\{\tiny LLM}};
+    \node[l,left=0.6cm of att] (sto) {인생이야기\\{\tiny LLM 1$\sim$3편}};
+    \node[l,left=0.6cm of sto] (hob) {취미\\{\tiny LLM 추론}};
+    \draw[->](a)--(loc);\draw[->](loc)--(job);\draw[->](job)--(val);
+    \draw[->](val)--(att);\draw[->](att)--(sto);\draw[->](sto)--(hob);
+    \node[navy,font=\tiny] at (1.7,-0.7) {\textbf{bias-free}};
+    \node[accent,font=\tiny] at (5.4,0.7) {\textbf{LLM 조건부}};
+  \end{tikzpicture}
+  \end{center}
+  \lead{인구통계 3개(파랑) $\to$ 성격·서사 4개(청록). 뒤로 갈수록 앞 정보를 \alert{맥락}으로 받는다.}
+\end{frame}
+
+% ============================================================
+\section{3. bias-free 코드}
+% ============================================================
+\begin{frame}[fragile]{나이·직업 — \alert{LLM 없이} 뽑는다}
+  {\scriptsize 파일: \pc{based\_data.py} · \texttt{generate\_age\_info()} / \texttt{generate\_career\_info()}}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+age = random.randint(7, 85)                 # 균등 랜덤 (LLM 아님)
+if   age <= 12: age_group = "child"
+elif age <= 19: age_group = "adolescent"
+elif age <= 29: age_group = "young_adult"   # ... adult / middle_aged / senior
+
+def generate_career_info(age):
+    if age < 18 or age > 65:                 # 학생/은퇴 -> 나이 맞춰 LLM
+        return {"status": get_completion(...)}
+    occupations = get_occupations()          # occupations_english.json
+    return {"status": random.choice(occupations)}   # 그 외 -> 테이블 랜덤
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{나이}: \pc{random.randint(7,85)} — 7$\sim$85세 균등. LLM에 맡기면 특정 연령대로 쏠려서 \alert{직접 랜덤}.
+    \item \textbf{age\_group}: 나이를 6개 구간으로 매핑(뒤 프롬프트에서 맥락으로 쓰임).
+    \item \textbf{직업}: 18$\sim$65세는 \pc{occupations.json}에서 \pc{random.choice} — 다수문화 기본값 편중 방지.
+    \item \textbf{예외}: 미성년/고령만 LLM이 나이 맞는 "학생/은퇴" 상태 생성(테이블에 없는 케이스).
+  \end{itemize}
+  \srcnote{\pc{get\_occupations()}는 파일을 한 번 읽고 \pc{\_occupations\_cache}에 캐시(반복 I/O 방지).}
+\end{frame}
+
+\begin{frame}[fragile]{위치 — 실재하는 도시를 뽑는다}
+  {\scriptsize 파일: \pc{based\_data.py} · \texttt{generate\_location()} (geonamescache)}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+gc = GeonamesCache()
+countries = gc.get_countries()
+country_code = random.choice(list(countries.keys()))   # 국가 랜덤
+cities = gc.get_cities()
+country_cities = [c for c in cities.values()
+                  if c['countrycode'] == country_code]  # 그 국가의 도시들
+city_data = random.choice(country_cities)               # 도시 랜덤
+return {"country": country['name'], "city": city_data['name']}
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{GeoNames}: 전 세계 국가·도시 오프라인 DB(\pc{geonamescache} 패키지). 실재 지명만 나옴.
+    \item \textbf{2단 랜덤}: 국가를 먼저 고르고 $\to$ 그 국가의 도시 중에서 고름(도시가 국가와 일치하도록).
+    \item \textbf{왜 LLM 아님}: LLM은 유명 도시(뉴욕·런던)로 쏠림 $\to$ DB 랜덤이 \alert{지리적 다양성} 보장.
+    \item \textbf{인생이야기와 연결}: 뒤에서 "그 지역에서 실제로 일어날 법한" 이야기를 만드는 근거가 됨.
+  \end{itemize}
+\end{frame}
+
+% ============================================================
+\section{4. LLM 코드 — 성격·서사}
+% ============================================================
+\begin{frame}[fragile]{가치관 — \alert{긍/부/중}을 랜덤 주입}
+  {\scriptsize 파일: \pc{based\_data.py} · \texttt{generate\_personal\_values()}}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+value_type = random.choice(['positive','negative','neutral'])  # 핵심!
+prompt = f"""... This person has a {value_type.upper()} value system ...
+             format your response EXACTLY as JSON:
+             {{"values_orientation": "short phrase ..."}}"""
+response = get_completion(messages, temperature=0.8)
+result = parse_gpt_response(response, expected_fields=["values_orientation"], ...)
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{\pc{value\_type} 랜덤}: 긍정/부정/중립을 \alert{코드가 강제}로 정해 프롬프트에 주입.
+    \item \textbf{왜}: 그냥 "가치관 만들어"라고 하면 LLM은 늘 \emph{긍정적·바람직한} 값만 생성(낙관 편향). 부정도 섞어 \alert{다양성} 확보.
+    \item \textbf{\pc{temperature=0.8}}: 다양한 표현이 나오도록 높게.
+    \item \textbf{입력}: 나이·성별·직업·위치(앞 단계 결과) $\to$ 인구통계에 \emph{조건부}인 가치관.
+    \item \textbf{출력}: \pc{\{"values\_orientation": "..."\}} — 다음 단계(태도)의 입력.
+  \end{itemize}
+  \srcnote{\pc{parse\_gpt\_response}는 마크다운/잡음 섞인 응답에서 JSON을 견고하게 추출(모듈 06에서 상술).}
+\end{frame}
+
+\begin{frame}[fragile]{인생이야기 $\to$ 취미 — \alert{추론}으로 잇는다}
+  {\scriptsize 파일: \pc{based\_data.py} · \texttt{generate\_personal\_story()} / \texttt{generate\_interests\_and\_hobbies()}}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+num_stories = random.randint(1, 3)          # 1~3편 무작위
+prompt = f"""Generate {num_stories} personal stories ... (each 150-200 words)
+   ... closely related to their country and region ..."""   # 지역 밀착
+# --- 취미는 이야기에서 '추론' ---
+prompt = """... infer two to three hobbies ... rather than simply
+            extracting them directly from the story."""
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{이야기 1$\sim$3편}: 편수를 랜덤화 $\to$ 인물마다 서사 밀도가 다름.
+    \item \textbf{지역 밀착}: "그 국가·지역에서 실제로 일어날 법한" 사건 요구 $\to$ 위치 앵커를 활용.
+    \item \textbf{취미는 추론}: 이야기에서 \emph{직접 뽑지 말고} 그 사람이 할 법한 취미를 \alert{유추}(\pc{temperature=0.2}로 안정적).
+    \item \textbf{왜 추론}: 이야기와 \emph{일관}되면서도 명시되지 않은 취미까지 나와 3차원적 인물 완성.
+  \end{itemize}
+  \lead{이렇게 논문의 "\alert{life-story-driven approach}"로 코어에서 취미·관심까지 \emph{일관되게} 확장한다.}
+\end{frame}
+
+% ============================================================
+\section{5. 시드의 결과물}
+% ============================================================
+\begin{frame}{시드가 만들어내는 것 — \pc{base\_info}}
+  \intu{위 함수들의 출력을 모으면 한 사람의 "씨앗 정보"가 된다. 이게 모듈 04에서 임베딩되어 슬롯 선택의 기준이 된다.}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \textbf{시드 필드(대략)}
+      \begin{itemize}\footnotesize
+        \item \pc{age}, \pc{age\_group}, \pc{gender}
+        \item \pc{location}(country, city)
+        \item \pc{career}(status)
+        \item \pc{values\_orientation}
+        \item \pc{attitude}, \pc{attitude\_details}, \pc{coping\_mechanism}
+        \item \pc{personal\_story}(1$\sim$3편 결합)
+        \item \pc{interests}(2$\sim$3개)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{다음 단계로}
+        이 시드를 텍스트로 요약 $\to$ \pc{text-embedding-ada-002}로 벡터화 $\to$ 2,297개 슬롯과 코사인 유사도(모듈 04).
+      \end{block}
+      \smallskip
+      {\footnotesize 논문 대응: 이 코어가 식 (2)의 앵커 $S$ 그 자체.}
+    \end{column}
+  \end{columns}
+  \lead{시드 = \alert{식 (2)의 $S$}. 이후 selector·generator가 전부 이 $S$에 조건부로 동작.}
+\end{frame}
+
+\begin{frame}{이 모듈 요약}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{꼭 기억할 것}
+      \begin{itemize}
+        \item 코어를 \alert{먼저 고정}(방황 방지)
+        \item 인구통계 = \alert{테이블/랜덤}(편향 차단)
+        \item 성격·서사 = \alert{LLM 조건부}
+        \item 가치관 유형 \alert{랜덤 주입}(낙관 편향↓)
+        \item 취미는 이야기에서 \alert{추론}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{함수 지도(\pc{based\_data.py})}
+      \begin{itemize}\footnotesize
+        \item \pc{generate\_age\_info} · \pc{generate\_gender}
+        \item \pc{generate\_location} · \pc{generate\_career\_info}
+        \item \pc{generate\_personal\_values}
+        \item \pc{generate\_life\_attitude}
+        \item \pc{generate\_personal\_story}
+        \item \pc{generate\_interests\_and\_hobbies}
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \lead{다음 \pc{04\_select\_attributes}: 이 시드로 2,297개 슬롯 중 200개를 \alert{5:3:2}로 고른다.}
+\end{frame}
+
+\begin{frame}[standout]
+  모듈 03 끝\\[0.4em]
+  {\normalsize 다음: \texttt{04\_select\_attributes} — 임베딩 + 5:3:2 선택 (Step 2--4)}
+\end{frame}
+
+\end{document}

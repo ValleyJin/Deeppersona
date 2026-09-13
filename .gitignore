@@ -41,3 +41,28 @@ ENV/
 .vscode/
 *.swp
 *.swo
+
+# LaTeX 빌드 부산물 (study/ 슬라이드) — 정책 §4
+*.aux
+*.log
+*.nav
+*.snm
+*.toc
+*.out
+*.vrb
+*.synctex.gz
+*.xdv
+*.fls
+*.fdb_latexmk
+*.bbl
+*.blg
+# 스터디 슬라이드 빌드 로그
+study/**/build.log
+study/**/*.log
+
+# 저작권 원본 그림 자산 (논문 PDF 캡처) — 로컬 빌드 전용, 커밋 금지 (정책 §2.1)
+# \IfFileExists 로 감싸므로 자산 없는 클론에서도 빌드됨.
+study/**/figs/
+
+# macOS
+.DS_Store

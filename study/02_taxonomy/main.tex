@@ -1,0 +1,394 @@
+% !TEX program = xelatex
+% DeepPersona 코드 학습교재 — 모듈 02: 속성 트리(Stage 1)와 데이터 구조
+\documentclass[aspectratio=169,10pt]{beamer}
+
+\usetheme{metropolis}
+\metroset{block=fill,numbering=fraction,progressbar=frametitle,sectionpage=progressbar}
+
+% ===== 한글 (XeLaTeX) =====
+\usepackage{kotex}
+\usepackage{fontspec}
+\setmainhangulfont{Apple SD Gothic Neo}
+\setsanshangulfont{Apple SD Gothic Neo}
+\setmonofont{D2Coding}
+
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usepackage{listings}
+
+% ===== 팔레트 =====
+\definecolor{accent}{HTML}{0E7C7B}
+\definecolor{navy}{HTML}{004191}
+\definecolor{orange}{HTML}{F97316}
+\definecolor{ink}{HTML}{20242A}
+\definecolor{muted}{HTML}{5A6472}
+\definecolor{blockbg}{HTML}{EDF1F6}
+\definecolor{codebg}{HTML}{E7ECF3}
+\definecolor{kw}{HTML}{0D6E6E}
+\definecolor{str}{HTML}{A8410F}
+\definecolor{com}{HTML}{5A6472}
+\setbeamercolor{progress bar}{fg=accent}
+\setbeamercolor{title separator}{fg=accent}
+\setbeamercolor{frametitle}{bg=accent}
+\setbeamercolor{alerted text}{fg=orange}
+\setbeamercolor{block title}{bg=blockbg,fg=ink}
+\setbeamercolor{block body}{bg=blockbg!55,fg=ink}
+
+% ===== 배너 매크로 =====
+% 정책 §4.1: 배너 여백은 매크로 내장 — 위 0.6em, 아래 1.15em (헤드·본문과 안 붙게)
+\newcommand{\lead}[1]{%
+  \vspace*{0.6em}{\setlength{\fboxsep}{9pt}%
+   \noindent\colorbox{accent!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{%
+     \textcolor{accent}{\textbf{한눈에}}\hspace{0.6em}#1}}}\par\vspace{1.15em}}
+\newcommand{\intu}[1]{%
+  \vspace*{0.2em}{\setlength{\fboxsep}{7pt}%
+   \noindent\colorbox{navy!8}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{%
+     \textcolor{navy}{\textbf{쉽게 말하면}}\hspace{0.6em}#1}}}\par\vspace{0.5em}}
+\newcommand{\srcnote}[1]{\vspace{0.35em}\par{\footnotesize\color{navy}$\blacktriangleright$~#1}}
+\newcommand{\pc}[1]{%
+  \tikz[baseline=(pcb.base)]{%
+    \node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,%
+          outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize #1};}}
+% ===== 원본 논문 그림 삽입 (자산 없으면 안내 박스) — 정책 §2.1 =====
+\newcommand{\origfig}[3]{%
+  \IfFileExists{#1}{%
+    \begin{center}\includegraphics[height=#2]{#1}\\[2pt]{\scriptsize\color{muted}#3}\end{center}}{%
+    \begin{center}\setlength{\fboxsep}{8pt}\fbox{\parbox{0.82\textwidth}{\centering\footnotesize\color{muted}%
+      [원본 그림 자산 없음 — 저작권상 저장소 미포함]\\[2pt]\texttt{#1}\\[2pt]#3}}\end{center}}}
+
+% ===== 코드블록 (listings) =====
+\lstdefinestyle{py}{
+  basicstyle=\ttfamily\scriptsize,
+  backgroundcolor=\color{codebg!55},
+  keywordstyle=\color{kw}\bfseries,
+  stringstyle=\color{str},
+  commentstyle=\color{com}\itshape,
+  numberstyle=\tiny\color{muted}, numbers=left, numbersep=6pt,
+  language=Python, showstringspaces=false, breaklines=true,
+  frame=leftline, framerule=1.4pt, rulecolor=\color{accent},
+  xleftmargin=14pt, aboveskip=3pt, belowskip=2pt, tabsize=2,
+}
+
+\title{DeepPersona 코드 학습교재}
+\subtitle{모듈 02 — 속성 트리(Taxonomy, Stage 1)와 데이터 구조}
+\author{학습 정리 덱 (Claude와 함께)}
+\institute{원저: Wang et al., \textit{DeepPersona} (arXiv:2511.07338) · 논문 \S3.1}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{frame}{이 모듈의 목표}
+  \lead{페르소나의 "빈 슬롯 창고"인 \alert{속성 트리}가 파일 안에서 어떤 모양이며, 어떤 코드가 그걸 만들었는지 본다.}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \small\textbf{얻는 것}
+      \begin{itemize}
+        \item 트리 = \emph{중첩 dict}, 경로 = \pc{X.Y.Z}
+        \item 데이터 파일 4종의 역할 지도
+        \item Stage 1 = 추출$\to$필터$\to$병합$\to$검증
+        \item 각 단계 \alert{코드블록 + 줄별 설명}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \small\textbf{핵심 숫자(이 fork 실측)}
+      \begin{itemize}
+        \item \pc{large\_attributes.json}: \alert{leaf 2,297}개
+        \item top-level \alert{19개}(정규 12 + 중복 7)
+        \item 최대 깊이 5단계
+        \item 논문 원본 트리: 8,496 노드
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \srcnote{"19 vs 12"는 뒤(§5)에서 다룰 실제 버그의 씨앗 — 미리 기억해 두자.}
+\end{frame}
+
+\begin{frame}{순서}
+  \tableofcontents
+\end{frame}
+
+% ============================================================
+\section{1. 왜 트리인가 — Stage 1의 목적}
+% ============================================================
+\begin{frame}{트리는 엔진의 \alert{조종면}(control surface)}
+  \intu{페르소나를 만들 때 "어떤 속성을 쓸 수 있는지"의 전체 메뉴판이 트리다. 메뉴판이 좋아야 다양·균형·깊이가 산다.}
+  \textbf{논문이 요구한 트리의 4조건 (\S3.1)}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{block}{① 데이터 기반 (data-driven)}
+        수작업 나열이 아니라 \emph{실제 ChatGPT 대화}에서 채굴.
+      \end{block}
+      \begin{block}{② 계층적 (hierarchical)}
+        큰 특질 $\to$ 세부로 자연스럽게 내려감(\pc{X.Y.Z}).
+      \end{block}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{block}{③ 의미 검증 (semantically-validated)}
+        모순·중복 제거. 유사 노드 병합.
+      \end{block}
+      \begin{block}{④ 진짜 개인적 (genuinely-personal)}
+        특정 브랜드·제품 같은 \emph{과도하게 구체적} 노드 배제.
+      \end{block}
+    \end{column}
+  \end{columns}
+  \lead{트리는 \alert{한 번} 만들어 파일로 커밋 — 이후 모든 페르소나가 재사용(Stage 2).}
+\end{frame}
+
+% ============================================================
+\section{2. 데이터 파일 지도}
+% ============================================================
+\begin{frame}{\pc{data/}\,의 파일들 — 무엇이 무엇인가}
+  \begin{center}
+  \renewcommand{\arraystretch}{1.25}\footnotesize
+  \begin{tabular}{@{}p{0.30\textwidth} p{0.16\textwidth} p{0.46\textwidth}@{}}
+    \toprule
+    \textbf{파일} & \textbf{규모} & \textbf{역할} \\
+    \midrule
+    \pc{large\_attributes.json} & leaf 2,297 & \alert{최종 트리}. Stage 2가 실제로 쓰는 슬롯 창고 \\
+    \pc{attributes\_merged.json} & leaf 4,624 & 병합 \emph{중간 산출물}(아직 덜 정리됨) \\
+    \pc{template.json} & 12개 & 허용된 \alert{top-level 카테고리} 정규 목록 \\
+    \pc{occupations.json} & 932줄 & 직업 사전(시드용, 모듈 03) \\
+    \pc{…embeddings.pkl} & 2297$\times$1536 & 슬롯 벡터 캐시(모듈 04) \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \intu{"트리 파일" 하나가 아니라, \emph{정리 단계별}로 파일이 여러 개다. 최종본은 \pc{large\_attributes.json}.}
+  \srcnote{leaf 수는 이 fork에서 \texttt{python}으로 직접 카운트한 실측치.}
+\end{frame}
+
+\begin{frame}[fragile]{트리 자료구조 — \alert{중첩 dict}, 빈 \{\} = leaf}
+  \intu{JSON 딕셔너리가 곧 나무다. 값이 빈 딕셔너리 \pc{\{\}}면 더 못 내려가는 잎(leaf)=실제 슬롯.}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{lstlisting}[style=py,language=,numbers=none]
+"Career and Work Identity": {
+  "Background": {
+    "careerExperience": {},
+    "technicalSkills": {}     <- leaf
+  },
+  "Business": {
+    "Role": {},               <- leaf
+    "Negotiation Skills": {}   <- leaf
+  }
+}
+\end{lstlisting}
+      {\scriptsize 위 dict를 경로로 펴면:}\\[2pt]
+      \pc{Career...Identity.Background.technicalSkills}\\
+      \pc{Career...Identity.Business.Role}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{center}
+      \begin{tikzpicture}[font=\scriptsize,>=Latex,x=1.1em,y=1.0em,
+          n/.style={draw=accent,fill=blockbg,rounded corners=2pt,inner sep=2.5pt},
+          leaf/.style={draw=orange,fill=orange!12,rounded corners=2pt,inner sep=2.5pt}]
+        \node[n] (r) at (0,4) {Career\dots Identity};
+        \node[n] (b) at (-3,2) {Background};
+        \node[n] (bu) at (2.4,2) {Business};
+        \node[leaf] (l1) at (-4.6,0) {careerExp.};
+        \node[leaf] (l2) at (-1.8,0) {technicalSkills};
+        \node[leaf] (l3) at (1.2,0) {Role};
+        \node[leaf] (l4) at (3.9,0) {Negotiation};
+        \draw[->](r)--(b); \draw[->](r)--(bu);
+        \draw[->](b)--(l1); \draw[->](b)--(l2);
+        \draw[->](bu)--(l3); \draw[->](bu)--(l4);
+        \node[orange,font=\tiny] at (5.0,0) {= 슬롯};
+      \end{tikzpicture}
+      \end{center}
+      {\scriptsize 깊이 최대 5. leaf만 "채울 수 있는 슬롯"이다.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{트리가 담은 도메인 — \alert{균형}(원본 Figure 3)}
+  \intu{2,297개 슬롯이 12개 대분류에 고르게 퍼져 있다 — 이 "균형"이 다양한 페르소나를 가능케 한다.}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+      \origfig{figs/fig3_sunburst.png}{0.56\textheight}{Fig.\ 3 (Wang et al.). 조각 크기 $\propto$ 도메인 점유율. 저작권상 \pc{figs/}는 커밋 제외(로컬 전용).}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \small
+      \textbf{왜 재작도 대신 원본?}
+      \begin{itemize}\footnotesize
+        \item 조각 수백 개 — \emph{재현이 비효율}(정책 §2.1: 원본이 더 합당하면 삽입).
+        \item 최대 점유 \alert{15.9\%} — 단일 주제 지배 없음(균형).
+      \end{itemize}
+      \smallskip
+      \textbf{읽는 법}
+      \begin{itemize}\footnotesize
+        \item 안쪽 고리 = 대분류
+        \item 바깥 고리 = 세부(leaf 근처)
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+\section{3. Stage 1 파이프라인 (코드)}
+% ============================================================
+\begin{frame}{4단계로 트리를 짓는다 — 어느 파일이 어느 단계}
+  \begin{center}
+  \begin{tikzpicture}[font=\footnotesize,>=Latex,
+      box/.style={draw=accent,fill=blockbg,rounded corners=3pt,align=center,inner sep=4pt,minimum height=2.4em,text width=6.6em}]
+    \node[box] (e) {① 추출\\{\scriptsize 대화$\to$X.Y.Z}\\{\ttfamily\tiny\color{navy}extract\_...}};
+    \node[box,right=0.6cm of e] (fi) {② 필터\\{\scriptsize 개인성·카테고리}\\{\ttfamily\tiny\color{navy}filter\_...}};
+    \node[box,right=0.6cm of fi] (m) {③ 병합\\{\scriptsize 유사 노드}\\{\ttfamily\tiny\color{navy}merge\_tree}};
+    \node[box,right=0.6cm of m] (c) {④ 검증·평탄화\\{\scriptsize 중복·경로화}\\{\ttfamily\tiny\color{navy}check\_leaves}};
+    \draw[->](e)--(fi);\draw[->](fi)--(m);\draw[->](m)--(c);
+  \end{tikzpicture}
+  \end{center}
+  \intu{원재료(대화) $\to$ 부스러기 속성 $\to$ 걸러내고 $\to$ 비슷한 걸 합치고 $\to$ 중복 없는 경로 목록으로.}
+  \lead{이 4개가 논문 \S3.1의 "추출 $\to$ 계층 병합 $\to$ 의미 검증·필터"에 그대로 대응.}
+\end{frame}
+
+\begin{frame}[fragile]{① 추출 — 대화에서 \pc{X.Y.Z} 속성 뽑기}
+  {\scriptsize 파일: \pc{extract\_personalized\_attributes.py} · \texttt{extract\_attributes()} (프롬프트 발췌)}
+\begin{lstlisting}[style=py,language=,numbers=none,basicstyle=\ttfamily\tiny]
+# Requirements: Output each attribute as a 3 level structure (e.g. X.Y.Z)
+# IMPORTANT: The first level ... MUST be chosen from the top-level categories.
+Available Top-Level Categories: {', '.join(self.persona_categories)}
+Question: {question}
+Personalization Reason: {reason}
+Output Format: { "attributes": ["attributeA1.levelA2.levelA3", ...] }
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{입력}: 한 (질문, 이유) 쌍 — 실제 사용자–ChatGPT 대화에서 나온 것.
+    \item \textbf{제약 1}: 모든 속성은 \alert{3단계 \pc{X.Y.Z}} 형식. (트리 깊이를 강제)
+    \item \textbf{제약 2}: 1단계(맨 앞)는 반드시 \pc{template.json}의 \alert{12개 카테고리 중 하나}.
+    \item \textbf{지시}: "너무 구체적이지 말고 \emph{일반적·상위}" — 브랜드/제품 배제(조건 ④).
+    \item \textbf{출력}: JSON \pc{\{"attributes":[...]\}} — 다음 단계가 파싱.
+  \end{itemize}
+  \srcnote{여기서 나온 속성들은 아직 \emph{제각각}. ②$\sim$④가 이를 하나의 트리로 정련한다.}
+\end{frame}
+
+\begin{frame}[fragile]{③ 병합 — 비슷한 형제 노드를 LLM이 합침}
+  {\scriptsize 파일: \pc{merge\_tree.py} · \texttt{merge\_level\_nodes()} — 같은 level 노드를 의미 유사도로 병합}
+\begin{lstlisting}[style=py,language=,numbers=none,basicstyle=\ttfamily\tiny]
+def merge_level_nodes(nodes, level, client):
+    prompt = """analyze nodes at the same level and suggest merges
+                based on semantic similarity ..."""
+    # -> LLM이 {old_name: new_name} 매핑 반환
+    mapping = validate_gpt_response(response_text)
+    merged  = process_merge_response(mapping, nodes_to_merge)
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{왜}: 서로 다른 대화가 \pc{technicalSkills} / \pc{Technical Skill} / \pc{tech\_skills}처럼 \alert{같은 뜻을 다른 이름}으로 만든다.
+    \item \textbf{방법}: 트리를 \pc{TreeNode}로 만들고 \alert{level(깊이)별}로 형제들을 모아 LLM에게 "합칠 것 제안" 요청.
+    \item \textbf{반환}: \pc{\{옛이름: 새이름\}} 매핑 $\to$ \pc{process\_merge\_response()}가 실제 노드를 합침.
+    \item \textbf{효과}: 트리가 \emph{조밀·일관}해짐(논문: "dense and hierarchical").
+  \end{itemize}
+  \srcnote{이 단계가 덜 돌면 top-level에 중복 variant가 남는다 — 이 fork의 19 vs 12 문제(§5).}
+\end{frame}
+
+\begin{frame}[fragile]{④ 검증 — \alert{임베딩 유사도}로 중복 잎 제거}
+  {\scriptsize 파일: \pc{check\_leaves.py} · \texttt{check\_path\_similarity()} — sentence-transformers 코사인}
+\begin{lstlisting}[style=py,language=,numbers=none,basicstyle=\ttfamily\tiny]
+def check_path_similarity(path1, path2):
+    embeddings = model.encode([path1, path2])          # 문장 임베딩
+    similarity = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
+    threshold  = 0.85          # 이 값보다 높으면 "너무 비슷" = 중복
+    return similarity > threshold
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{model}: \pc{sentence-transformers}(로컬 임베딩) — API 아님, 무료·오프라인.
+    \item \textbf{cosine\_similarity}: 두 경로 문장을 벡터로 바꿔 \alert{방향 유사도}(1=동일, 0=무관) 계산.
+    \item \textbf{threshold=0.85}: 경험적 컷. 넘으면 한쪽을 \emph{중복}으로 간주해 제거.
+    \item 이어서 \pc{check\_level\_compatibility()}(부모–자식 계층이 말이 되는지 LLM 확인) + \pc{convert\_to\_X.Y.Z.py}(트리$\to$경로 목록 평탄화).
+  \end{itemize}
+  \lead{여기서 쓰는 코사인 유사도 개념은 \alert{모듈 04의 5:3:2 선택}과 똑같다 — 미리 익혀두자.}
+\end{frame}
+
+% ============================================================
+\section{4. 필터의 판정들}
+% ============================================================
+\begin{frame}{② 필터 — 세 가지 LLM 판정}
+  {\scriptsize 파일: \pc{filter\_personalized\_attributes.py}}
+  \begin{center}
+  \renewcommand{\arraystretch}{1.3}\footnotesize
+  \begin{tabular}{@{}p{0.30\textwidth} p{0.28\textwidth} p{0.34\textwidth}@{}}
+    \toprule
+    \textbf{함수} & \textbf{묻는 것} & \textbf{탈락 예} \\
+    \midrule
+    \pc{check\_if\_personalized} & 이 속성이 \emph{개인 특성}인가? & "날씨", "환율" 같은 중립 정보 \\
+    \pc{check\_category} & 1단계가 12개 중 맞는가? & 엉뚱한 top-level $\to$ 교정 \\
+    \pc{check\_last\_segment} & leaf가 \emph{일반 범주}인가? & "Nike Air Max"(특정 제품) \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \intu{추출된 부스러기 중 "개인을 설명하지 못하는 것 / 잘못 분류된 것 / 너무 구체적인 것"을 걸러낸다.}
+  \lead{세 판정 = 트리 4조건 중 \alert{③의미검증 · ④진짜 개인적}을 강제하는 게이트.}
+\end{frame}
+
+% ============================================================
+\section{5. 실제 파일의 함정}
+% ============================================================
+\begin{frame}{실측: top-level이 \alert{12가 아니라 19}}
+  \intu{정규 카테고리는 12개인데, 최종 파일엔 거의 같은 뜻의 카테고리가 여러 벌 남아 19개가 됐다 — 병합(③)이 top-level까지는 못 갔다.}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \textbf{중복 variant 실례 (같은 뜻, 다른 문자열)}
+      \begin{itemize}\footnotesize
+        \item Core Values and Beliefs
+        \item Core Values and Philosophy
+        \item Core Values, Beliefs, Philosophy
+        \item Core Values, Beliefs, \emph{and} Philosophy
+      \end{itemize}
+      {\footnotesize $\Rightarrow$ 하나여야 할 "가치·신념" 카테고리가 \alert{4벌}. Lifestyle 3벌, Psychological 2벌 \dots}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{center}
+      \renewcommand{\arraystretch}{1.2}\footnotesize
+      \begin{tabular}{@{}lc@{}}
+        \toprule
+        항목 & 실측 \\
+        \midrule
+        정규 카테고리(template) & 12 \\
+        실제 top-level & \alert{19} \\
+        leaf(슬롯) 수 & 2,297 \\
+        최대 깊이 & 5 \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+    \end{column}
+  \end{columns}
+  \lead{이 "19 vs 12"가 \alert{모듈 05의 카테고리 drop 버그}로 이어진다 — \pc{generate\_profile.py}가 6개만 처리(study.md \S13).}
+\end{frame}
+
+\begin{frame}{이 모듈 요약}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{꼭 기억할 것}
+      \begin{itemize}
+        \item 트리 = \emph{중첩 dict}, \pc{\{\}}=leaf=슬롯
+        \item 경로 표기 \pc{X.Y.Z}(3단계 강제)
+        \item Stage 1 = 추출$\to$필터$\to$병합$\to$검증
+        \item 병합·검증에 \alert{임베딩 코사인} 사용
+        \item 최종본 \pc{large\_attributes.json}(2,297 leaf)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{코드 지도}
+      \begin{itemize}\footnotesize
+        \item ① \pc{extract\_personalized\_attributes.py}
+        \item ② \pc{filter\_personalized\_attributes.py}
+        \item ③ \pc{merge\_tree.py}
+        \item ④ \pc{check\_leaves.py} + \pc{convert\_to\_X.Y.Z.py}
+      \end{itemize}
+      \smallskip
+      {\footnotesize 남은 결함: top-level 19(중복) $\to$ 하류 버그의 씨앗.}
+    \end{column}
+  \end{columns}
+  \lead{다음 \pc{03\_based\_data}: 트리를 걷기 전에 필요한 \alert{시드 인물(앵커)}을 만든다.}
+\end{frame}
+
+\begin{frame}[standout]
+  모듈 02 끝\\[0.4em]
+  {\normalsize 다음: \texttt{03\_based\_data} — 시드/앵커 코어 (Step 1)}
+\end{frame}
+
+\end{document}

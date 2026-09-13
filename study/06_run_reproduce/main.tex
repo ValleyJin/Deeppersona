@@ -1,0 +1,294 @@
+% !TEX program = xelatex
+% DeepPersona 코드 학습교재 — 모듈 06: 실행·재현·스크립트
+\documentclass[aspectratio=169,10pt]{beamer}
+\usetheme{metropolis}
+\metroset{block=fill,numbering=fraction,progressbar=frametitle,sectionpage=progressbar}
+\usepackage{kotex}\usepackage{fontspec}
+\setmainhangulfont{Apple SD Gothic Neo}\setsanshangulfont{Apple SD Gothic Neo}\setmonofont{D2Coding}
+\usepackage{booktabs}\usepackage{array}\usepackage{graphicx}\usepackage{amssymb}\usepackage{amsmath}
+\usepackage{tikz}\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usepackage{listings}
+
+\definecolor{accent}{HTML}{0E7C7B}\definecolor{navy}{HTML}{004191}\definecolor{orange}{HTML}{F97316}
+\definecolor{ink}{HTML}{20242A}\definecolor{muted}{HTML}{5A6472}\definecolor{blockbg}{HTML}{EDF1F6}
+\definecolor{codebg}{HTML}{E7ECF3}\definecolor{kw}{HTML}{0D6E6E}\definecolor{str}{HTML}{A8410F}\definecolor{com}{HTML}{5A6472}
+\setbeamercolor{progress bar}{fg=accent}\setbeamercolor{title separator}{fg=accent}\setbeamercolor{frametitle}{bg=accent}
+\setbeamercolor{alerted text}{fg=orange}\setbeamercolor{block title}{bg=blockbg,fg=ink}\setbeamercolor{block body}{bg=blockbg!55,fg=ink}
+
+\newcommand{\lead}[1]{\vspace*{0.6em}{\setlength{\fboxsep}{9pt}\noindent\colorbox{accent!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textcolor{accent}{\textbf{한눈에}}\hspace{0.6em}#1}}}\par\vspace{1.15em}}
+\newcommand{\intu}[1]{\vspace*{0.2em}{\setlength{\fboxsep}{7pt}\noindent\colorbox{navy!8}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textcolor{navy}{\textbf{쉽게 말하면}}\hspace{0.6em}#1}}}\par\vspace{0.5em}}
+\newcommand{\srcnote}[1]{\vspace{0.35em}\par{\footnotesize\color{navy}$\blacktriangleright$~#1}}
+\newcommand{\pc}[1]{\tikz[baseline=(pcb.base)]{\node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize #1};}}
+\lstdefinestyle{py}{basicstyle=\ttfamily\scriptsize,backgroundcolor=\color{codebg!55},keywordstyle=\color{kw}\bfseries,stringstyle=\color{str},commentstyle=\color{com}\itshape,language=Python,showstringspaces=false,breaklines=true,frame=leftline,framerule=1.4pt,rulecolor=\color{accent},xleftmargin=12pt,aboveskip=3pt,belowskip=2pt,tabsize=2}
+\lstdefinestyle{sh}{basicstyle=\ttfamily\scriptsize,backgroundcolor=\color{codebg!55},language=bash,keywordstyle=\color{kw}\bfseries,commentstyle=\color{com}\itshape,showstringspaces=false,frame=leftline,framerule=1.4pt,rulecolor=\color{navy},xleftmargin=12pt,aboveskip=3pt,belowskip=2pt}
+
+\title{DeepPersona 코드 학습교재}
+\subtitle{모듈 06 — 실행·재현·스크립트 (마지막)}
+\author{학습 정리 덱 (Claude와 함께)}
+\institute{원저: Wang et al., \textit{DeepPersona} (arXiv:2511.07338)}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{frame}{이 모듈의 목표 + 참고 자료}
+  \lead{앞 5개 모듈로 \emph{이해}한 파이프라인을 실제로 \alert{돌려 재현}한다 — 환경$\to$pkl$\to$smoke$\to$sweep.}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \small\textbf{얻는 것}
+      \begin{itemize}
+        \item \pc{.venv} + \pc{.env} 환경 설정
+        \item 깨진 \pc{pkl} \alert{재생성}(진짜 스크립트)
+        \item smoke test로 동작 확인
+        \item sweep로 README "1MB" 검증
+        \item \alert{재현 체크리스트}(런북)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \small\textbf{참고 자료(입문 튜토리얼)}
+      \begin{itemize}\footnotesize
+        \item ValleyJin/\pc{Tutorial-Builder}\\ \pc{output/Deeppersona/index.md}
+        \item 5장 구성 $\leftrightarrow$ 본 교재 모듈 대응(다음 장)
+        \item \pc{references.bib}에 등재
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \srcnote{튜토리얼은 입문용 고수준, 본 교재는 코드 밀착 심화 — 상보적으로 함께 보면 좋다.}
+\end{frame}
+
+\begin{frame}{순서}\tableofcontents\end{frame}
+
+% ============================================================
+\section{0. 튜토리얼 $\leftrightarrow$ 본 교재 지도}
+% ============================================================
+\begin{frame}{입문 튜토리얼 5장 $\leftrightarrow$ 본 교재 6모듈}
+  \intu{같은 코드를 두 시선으로: 튜토리얼(비유 입문) + 본 교재(코드 심화). 대응표로 오가며 학습.}
+  \begin{center}
+  \renewcommand{\arraystretch}{1.15}\footnotesize
+  \begin{tabular}{@{}p{0.42\textwidth} p{0.50\textwidth}@{}}
+    \toprule
+    \textbf{튜토리얼 장} & \textbf{본 교재 모듈} \\
+    \midrule
+    1. .env 시크릿 로딩 & 06 \S1 (환경 설정) \\
+    2. 인물 생성 엔진 & 03 (시드) + 05 (값 채우기) \\
+    3. 계층적 속성 변환 & 02 (속성 트리 Stage 1) \\
+    4. 속성 선택기 & 04 (임베딩 + 5:3:2) \\
+    5. 피클 파일 재생성 & 06 \S2 (pkl 재생성) \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \lead{튜토리얼=직관("왜/무엇"), 본 교재=재현("어떻게/코드"). 겹쳐 보면 이해가 단단해진다.}
+\end{frame}
+
+% ============================================================
+\section{1. 환경 설정 (.venv + .env)}
+% ============================================================
+\begin{frame}[fragile]{환경 — Python 3.11 \pc{.venv} + 패키지}
+  {\scriptsize 시스템 Python 3.14는 ML wheel 호환 우려 $\to$ 3.11로 격리}
+\begin{lstlisting}[style=sh,numbers=none]
+python3.11 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install openai sentence-transformers scikit-learn \
+                      numpy tqdm geonamescache python-dotenv
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{\pc{.venv}}: 프로젝트 전용 격리 환경(시스템 Python 오염 방지). \pc{.gitignore}에 포함.
+    \item \textbf{핵심 패키지}: \pc{openai}(LLM·임베딩), \pc{sentence-transformers}(트리 dedup, 모듈 02), \pc{scikit-learn}(코사인), \pc{geonamescache}(위치, 모듈 03), \pc{python-dotenv}(.env).
+  \end{itemize}
+  \srcnote{설치본: openai 2.40, sentence-transformers 5.5(torch 2.12), numpy 2.4. (study.md \S1)}
+\end{frame}
+
+\begin{frame}[fragile]{\pc{.env} 시크릿 로딩 — 하드코딩 제거}
+  {\scriptsize 파일: \pc{config.py} (튜토리얼 1장과 동일 패턴)}
+\begin{lstlisting}[style=py,numbers=none]
+from dotenv import load_dotenv
+load_dotenv()                               # .env 를 환경변수로 로드
+GEONAMES_USERNAME = os.getenv("GEONAMES_USERNAME", "demo")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:                       # 없으면 즉시 실패(실수 방지)
+    raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env ...")
+client = OpenAI(api_key=OPENAI_API_KEY)
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{왜}: API 키를 코드에 \pc{"sk-..."}로 박으면 유출 위험. \pc{.env}(gitignore)로 분리.
+    \item \textbf{\pc{load\_dotenv()}}: \pc{.env}의 \pc{KEY=VALUE}를 \pc{os.environ}에 주입 $\to$ 어디서든 \pc{os.getenv}로 조회.
+    \item \textbf{조기 실패}: 키 없으면 \pc{raise} — 빈 키로 조용히 돌다 실패하는 것 방지.
+    \item \textbf{원본 문제}: 5개 파일에 \pc{OPENAI\_API\_KEY="OPENAI\_API\_KEY"} placeholder 하드코딩 $\to$ 이 패턴으로 교체(study.md \S2).
+  \end{itemize}
+  \srcnote{\pc{.env}(실제 시크릿, gitignore) + \pc{.env.example}(템플릿, 커밋)로 분리.}
+\end{frame}
+
+% ============================================================
+\section{2. pickle 재생성}
+% ============================================================
+\begin{frame}[fragile]{깨진 \pc{pkl} 재생성 — \alert{복구 아닌 재계산}}
+  {\scriptsize 파일: \pc{scripts/regenerate\_embeddings.py} (실제 스크립트)}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+def flatten_paths(node, prefix=""):          # 트리 -> leaf 경로 목록 (선택기와 동일)
+    if isinstance(node, dict) and not node: return [prefix]     # 빈{} = leaf
+    ...                                       # 재귀로 X.Y.Z 경로 수집
+paths = flatten_paths(taxonomy)               # 2,297개
+for i in range(0, len(paths), BATCH_SIZE):    # 256개씩 배치
+    resp = client.embeddings.create(model="text-embedding-ada-002", input=batch)
+    all_embeddings.extend([d.embedding for d in resp.data])
+embeddings = np.asarray(all_embeddings, dtype=np.float64)
+assert embeddings.shape == (len(paths), 1536) # (2297, 1536) 검증
+pickle.dump({"attribute_paths": paths, "embeddings": embeddings}, f)
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{원리}: ada-002 weights는 고정 $\to$ 같은 입력 = 같은 벡터. "복구"가 아니라 \alert{재계산}(study.md \S7).
+    \item \textbf{입력 보존}: 슬롯 경로는 \pc{large\_attributes.json}에 그대로 $\to$ 재료가 남아 있어 재생성 가능.
+    \item \textbf{배치}: 256개씩 묶어 API 호출 수↓. \pc{np.float64}, shape \pc{(2297,1536)} \pc{assert}로 무결성 확인.
+    \item \textbf{안전}: 깨진 원본을 \pc{.broken}으로 백업 후 덮어씀.
+  \end{itemize}
+  \srcnote{비용 $\approx$\$0.002, 1$\sim$3분. 튜토리얼 5장은 같은 개념을 비유로 설명(코드는 예시적).}
+\end{frame}
+
+\begin{frame}{왜 깨졌었나 — forensic 요약}
+  \intu{원본 repo의 pkl이 정확히 6.8MB에서 잘려 있었다(정상 27MB). 산수로 원래 정체를 역추론했다.}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \begin{itemize}\footnotesize
+        \item 증상: \pc{pickle data was truncated}
+        \item \pc{pickletools}: numpy 배열 직렬화 중 절단, 기대 28,225,536 bytes
+        \item $28{,}225{,}536 \div 8(\text{float64}) \div 1{,}536 = \alert{2{,}297}$
+        \item 2,297 = leaf 수, 1,536 = ada-002 차원 $\to$ 정체 확정
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{block}{재생성 결과}
+        \footnotesize 27.05 MB 정상 pkl. 이후 vector search 정상 동작(빈 프로필 $\to$ 실제 속성).
+      \end{block}
+    \end{column}
+  \end{columns}
+  \lead{원본 repo(upstream 포함) 자체의 결함 — 전송 오류 아님. \pc{regenerate\_embeddings.py}로 해결.}
+  \srcnote{상세 forensic: study.md \S6. 재현자는 이 pkl 무결성을 \alert{가장 먼저} 확인해야 한다.}
+\end{frame}
+
+% ============================================================
+\section{3. 동작 확인 (smoke \& sweep)}
+% ============================================================
+\begin{frame}[fragile]{smoke test — end-to-end 1회}
+  {\scriptsize 파일: \pc{scripts/test\_single\_profile.py}}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+sys.path.insert(0, str(REPO_ROOT / "generate_user_profile"))
+from generate_profile import generate_single_profile
+profile = generate_single_profile(template=None, profile_index=0, attribute_count=100)
+if not profile: sys.exit("FAILED: empty profile")
+out_path.write_text(json.dumps(profile, ensure_ascii=False, indent=2))
+print(f"size: {out_path.stat().st_size:,} bytes")
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{목적}: 시드$\to$선택$\to$값채우기$\to$Summary 전 과정이 도는지 \alert{한 번에} 확인.
+    \item \textbf{신호}: 정상이면 수 KB JSON. \alert{1.9KB}면 pkl 문제(속성 0개) $\to$ \S2로.
+    \item \textbf{실행}: \pc{.venv/bin/python scripts/test\_single\_profile.py} (repo root에서).
+  \end{itemize}
+  \srcnote{재생성 전엔 1.9KB(0 attrs), 재생성 후 count=100에서 9.0KB(53 attrs)로 회복.}
+\end{frame}
+
+\begin{frame}{sweep — README "1MB" 주장 검증}
+  \intu{속성 수를 늘려가며 프로필 크기를 측정해, 광고된 "페르소나당 1MB"가 실제로 나오는지 확인한다.}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      {\scriptsize 파일: \pc{scripts/test\_attribute\_count\_sweep.py}}
+      \begin{center}\footnotesize
+      \renewcommand{\arraystretch}{1.15}
+      \begin{tabular}{@{}rrrr@{}}\toprule
+        count & 시간 & 크기 & attrs \\\midrule
+        100 & 31.7s & 9.0 KB & 53 \\
+        200 & 38.0s & 13.3 KB & 94 \\
+        300 & 55.7s & 20.1 KB & 145 \\
+        \alert{350} & 74.2s & \alert{27.4 KB} & 200 \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{결론}
+      \begin{itemize}\footnotesize
+        \item 최대 \alert{27.4 KB} — 1MB의 \alert{2.7\%}(약 37배 격차)
+        \item 선형(0.14 KB/attr): 1MB엔 $\sim$7,300 attrs 필요(트리 max는 2,297)
+        \item 병목 = 모듈 05의 \alert{카테고리 drop 버그}(6/19 처리)
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \lead{README의 "1MB narrative"는 현재 코드 경로로는 \alert{도달 불가} — 매핑 수정이 선결(study.md \S13).}
+\end{frame}
+
+% ============================================================
+\section{4. 재현 체크리스트}
+% ============================================================
+\begin{frame}[fragile]{재현 런북 — 처음부터 끝까지}
+  \intu{새 환경에서 이 순서대로만 하면 페르소나가 재현된다.}
+\begin{lstlisting}[style=sh,numbers=left,basicstyle=\ttfamily\scriptsize]
+# 1) 환경
+python3.11 -m venv .venv
+.venv/bin/pip install openai sentence-transformers scikit-learn \
+                      numpy tqdm geonamescache python-dotenv
+# 2) 시크릿
+cp .env.example .env         # 편집: OPENAI_API_KEY=sk-...  (필요시 GEONAMES_USERNAME)
+# 3) 임베딩 캐시 재생성 (필수! 원본 pkl은 손상)
+.venv/bin/python scripts/regenerate_embeddings.py     # -> 27MB pkl
+# 4) 동작 확인
+.venv/bin/python scripts/test_single_profile.py       # -> 수 KB JSON
+# 5) (선택) 스케일 검증
+.venv/bin/python scripts/test_attribute_count_sweep.py
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{3번이 관문}: pkl 재생성을 건너뛰면 4번이 1.9KB 빈 프로필로 실패.
+    \item \textbf{get\_completion 견고성}: LLM 호출은 \pc{max\_retries=3} 재시도 내장(일시 오류 방어).
+  \end{itemize}
+  \srcnote{출력은 \pc{output/}에 저장(gitignore). API 비용이 드니 count·횟수를 작게 시작.}
+\end{frame}
+
+% ============================================================
+\section{5. 교재 마무리}
+% ============================================================
+\begin{frame}{전체 교재 지도 — 6개 모듈}
+  \begin{center}
+  \begin{tikzpicture}[font=\scriptsize,>=Latex,
+      m/.style={draw=accent,fill=blockbg,rounded corners=2pt,align=center,inner sep=3pt,text width=8.2em,minimum height=1.8em}]
+    \node[m] (m1) {01 큰 그림\\{\tiny 문제·파이프라인·수식}};
+    \node[m,below=0.3cm of m1] (m2) {02 속성 트리(Stage 1)\\{\tiny process\_attributes, data}};
+    \node[m,below=0.3cm of m2] (m3) {03 시드/앵커\\{\tiny based\_data.py}};
+    \node[m,right=1.2cm of m1] (m4) {04 5:3:2 선택\\{\tiny select\_attributes.py}};
+    \node[m,below=0.3cm of m4] (m5) {05 값 채우기\\{\tiny generate\_profile.py}};
+    \node[m,below=0.3cm of m5] (m6) {06 실행·재현\\{\tiny scripts, .env, pkl}};
+    \draw[->](m1)--(m2);\draw[->](m2)--(m3);\draw[->](m3.east)to[out=0,in=180](m4.west);
+    \draw[->](m4)--(m5);\draw[->](m5)--(m6);
+  \end{tikzpicture}
+  \end{center}
+  \lead{Stage 1(트리) $\to$ Stage 2(시드$\to$선택$\to$채우기) $\to$ 실행·재현. 이제 코드를 \alert{읽고 재현}할 수 있다.}
+\end{frame}
+
+\begin{frame}{핵심 요약 — 한 장}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{파이프라인}
+      \begin{itemize}\footnotesize
+        \item 트리 1회 구축(추출$\to$필터$\to$병합$\to$검증)
+        \item 시드: 인구통계(테이블)+성격·서사(LLM)
+        \item 선택: ada-002 임베딩 + \alert{5:3:2}
+        \item 채우기: 카테고리 순차·조건부(depth-first)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{알아둘 결함/함정}
+      \begin{itemize}\footnotesize
+        \item 원본 \pc{pkl} 손상 $\to$ 반드시 재생성
+        \item top-level \alert{19 vs 12}(중복 variant)
+        \item 카테고리 \alert{6/19}만 처리 $\to$ 27KB
+        \item 값 100자 캡 $\to$ 얕은 narrative
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \lead{"1MB"까지 가려면: 카테고리 매핑 수정 + variant 정규화 + narrative 길이↑ — \alert{모두} 필요.}
+  \srcnote{더 깊은 배경·전략(한국어 페르소나, 고대인 NPC 등)은 루트 \pc{study.md} \S10--15.}
+\end{frame}
+
+\begin{frame}[standout]
+  교재 완주 🎉\\[0.4em]
+  {\normalsize 6개 모듈 끝 — 이제 코드를 이해하고 재현할 수 있다}
+\end{frame}
+
+\end{document}

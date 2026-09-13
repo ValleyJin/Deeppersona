@@ -1,0 +1,5 @@
+# latexmkrc (metropolis-kr 슬라이드) — 한글 kotex 때문에 XeLaTeX 로 빌드.
+# 이 파일이 있는 폴더에서 latexmk / make 실행 시 자동 적용된다.
+$pdf_mode = 5;   # 5 = xelatex (pdflatex 로 바꾸려면 1)
+$xelatex = 'xelatex -synctex=1 -interaction=nonstopmode -file-line-error %O %S';
+$clean_ext = 'aux bbl blg idx ind lof lot out toc acn acr alg glg glo gls fls log fdb_latexmk snm nav synctex.gz xdv';

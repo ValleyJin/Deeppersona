@@ -1,0 +1,365 @@
+% !TEX program = xelatex
+% DeepPersona 코드 학습교재 — 모듈 01: 큰 그림 (Overview)
+% 빌드: (이 폴더에서) make   또는   latexmk -xelatex main.tex
+% 정책: latex-autobuild/docs/slide-content-policy.md + LATEX_정책.md 준수
+\documentclass[aspectratio=169,10pt]{beamer}   % 16:9 (스터디 덱: 밀도 우선)
+
+\usetheme{metropolis}
+\metroset{block=fill,numbering=fraction,progressbar=frametitle,sectionpage=progressbar}
+
+% ===== 한글 (XeLaTeX) =====
+\usepackage{kotex}
+\usepackage{fontspec}
+\setmainhangulfont{Apple SD Gothic Neo}
+\setsanshangulfont{Apple SD Gothic Neo}
+\setmonofont{D2Coding}          % 코드용(한글 주석 가능) 고정폭 폰트
+
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+
+% ===== 팔레트 (LATEX_정책 §1: kaistblue/teal + accent 주황) =====
+\definecolor{accent}{HTML}{0E7C7B}     % teal (기본 강조·progress)
+\definecolor{navy}{HTML}{004191}       % kaistblue
+\definecolor{orange}{HTML}{F97316}     % \alert 용 accent 주황
+\definecolor{ink}{HTML}{20242A}
+\definecolor{muted}{HTML}{5A6472}
+\definecolor{blockbg}{HTML}{EDF1F6}    % 옅은 청회색 블록
+\definecolor{codebg}{HTML}{E7ECF3}
+\setbeamercolor{progress bar}{fg=accent}
+\setbeamercolor{title separator}{fg=accent}
+\setbeamercolor{frametitle}{bg=accent}
+\setbeamercolor{alerted text}{fg=orange}
+\setbeamercolor{block title}{bg=blockbg,fg=ink}
+\setbeamercolor{block body}{bg=blockbg!55,fg=ink}
+
+% ===== 두괄식 결론 배너 =====
+% 정책 §4.1: 배너 여백은 매크로 내장 — 위 0.6em, 아래 1.15em (헤드·본문과 안 붙게)
+\newcommand{\lead}[1]{%
+  \vspace*{0.6em}%
+  {\setlength{\fboxsep}{9pt}%
+   \noindent\colorbox{accent!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{%
+     \textcolor{accent}{\textbf{한눈에}}\hspace{0.6em}#1}}}\par\vspace{1.15em}}
+% ===== 수식 직관 배너 "쉽게 말하면" (정책 §1: 직관 → 기호 → 세부) =====
+\newcommand{\intu}[1]{%
+  \vspace*{0.2em}%
+  {\setlength{\fboxsep}{7pt}%
+   \noindent\colorbox{navy!8}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{%
+     \textcolor{navy}{\textbf{쉽게 말하면}}\hspace{0.6em}#1}}}\par\vspace{0.5em}}
+% ===== 출처/사례 한 줄 배너 =====
+\newcommand{\srcnote}[1]{\vspace{0.35em}\par{\footnotesize\color{navy}$\blacktriangleright$~#1}}
+% ===== 인라인 코드 배지 (정책 §2.7: 글자만 감싸기) =====
+\newcommand{\pc}[1]{%
+  \tikz[baseline=(pcb.base)]{%
+    \node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,%
+          outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize #1};}}
+% ===== 원본 논문 그림 삽입 (자산 없으면 안내 박스) — 정책 §2.1 =====
+% #1=경로 #2=height #3=캡션. 저작권 자료라 저장소 미포함, 로컬 빌드에서만 표시.
+\newcommand{\origfig}[3]{%
+  \IfFileExists{#1}{%
+    \begin{center}\includegraphics[height=#2]{#1}\\[2pt]{\scriptsize\color{muted}#3}\end{center}}{%
+    \begin{center}\setlength{\fboxsep}{8pt}\fbox{\parbox{0.82\textwidth}{\centering\footnotesize\color{muted}%
+      [원본 그림 자산 없음 — 저작권상 저장소 미포함]\\[2pt]\texttt{#1}\\[2pt]#3}}\end{center}}}
+
+\title{DeepPersona 코드 학습교재}
+\subtitle{모듈 01 — 큰 그림: 무엇을·왜·어떻게 (코드 $\leftrightarrow$ 논문 지도)}
+\author{학습 정리 덱 (Claude와 함께)}
+\institute{원저: Wang et al., \textit{DeepPersona} (arXiv:2511.07338)}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{frame}{이 모듈의 목표와 순서}
+  \lead{DeepPersona를 \alert{한 장의 지도}로 먼저 이해한다 — 다음 모듈부터 코드를 줄 단위로 판다.}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \small
+      \textbf{이 모듈에서 얻는 것}
+      \begin{itemize}
+        \item 이 프로젝트가 \emph{푸는 문제}
+        \item 2단계 파이프라인의 \emph{전체 흐름}
+        \item \alert{코드 파일 $\leftrightarrow$ 논문 단계} 대응표
+        \item 핵심 수식 2개(무엇을 뜻하는지)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \small
+      \textbf{학습 로드맵(서브폴더)}
+      \begin{itemize}
+        \item \pc{01\_overview} — 지금 여기
+        \item \pc{02\_taxonomy} — 속성 트리(Stage 1)
+        \item \pc{03\_based\_data} — 시드/앵커
+        \item \pc{04\_select\_attributes} — 5:3:2
+        \item \pc{05\_generate\_profile} — 값 채우기
+        \item \pc{06\_run\_reproduce} — 실행/재현
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \srcnote{목표: 사용자가 코드를 이해하고 \emph{그대로 재현}할 수 있게 한다.}
+\end{frame}
+
+\begin{frame}{발표 순서}
+  \tableofcontents
+\end{frame}
+
+% ============================================================
+\section{1. 왜 만들었나 — 문제의식}
+% ============================================================
+\begin{frame}{기존 합성 페르소나는 \alert{얕다}}
+  \lead{기존 방법은 \emph{양(quantity)}은 키웠지만 \emph{깊이(depth)}는 못 키웠다.}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \textbf{합성 페르소나(synthetic persona)란?}
+      \begin{itemize}
+        \item LLM에 "당신은 32세 게임개발자…"처럼 \emph{가상 인물 설정}을 주입한 것
+        \item 용도: 개인화 LLM 학습, 사회 시뮬레이션, 정렬(alignment) 연구
+      \end{itemize}
+      \smallskip
+      \textbf{한계 (논문 \S1)}
+      \begin{itemize}
+        \item 보통 \alert{30개 미만}의 수작업 속성뿐 $\Rightarrow$ 납작함
+        \item 순진하게 LLM으로 늘리면 \emph{판박이(stereotype)}·낙관 편향
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      % Fig 1 재현: quantity(가로) vs depth(세로) 트레이드오프
+      \begin{center}
+      \begin{tikzpicture}[x=1.05em,y=1.0em,font=\scriptsize]
+        \draw[->,thick] (0,0)--(9.4,0) node[right]{\,양(quantity)};
+        \draw[->,thick] (0,0)--(0,6.4) node[above,rotate=0]{\,깊이(depth)};
+        % 기존: 대량-얕음
+        \fill[muted] (7.8,0.5) circle (2.2pt) node[above=1pt,text=muted]{PersonaHub};
+        \fill[muted] (3.2,0.8) circle (2.2pt) node[above=1pt,text=muted]{OpenChar.};
+        \fill[muted] (1.6,1.9) circle (2.2pt);
+        \fill[muted] (2.4,1.2) circle (2.2pt);
+        % DeepPersona: 대량 + 깊음
+        \fill[orange] (8.4,5.6) circle (3.4pt);
+        \node[orange,anchor=east,align=right] at (8.1,5.6){\textbf{DeepPersona}\\{\tiny 대량 + 깊음}};
+        \draw[dashed,muted] (0,4.0)--(9.4,4.0) node[right,black]{\tiny $k>100$ 속성};
+      \end{tikzpicture}
+      \end{center}
+      \srcnote{논문 Fig.\ 1을 개념만 다시 그림.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{목표: \alert{narrative-complete} 페르소나}
+  \intu{"이야기까지 완결된" 페르소나 = 속성이 수백 개인데(\emph{깊이}), 서로 안 모순되고(\emph{일관}), 사람마다 다른(\emph{다양}) 인물.}
+  논문은 \emph{좋은 페르소나}가 갖춰야 할 세 조건을 못 박는다(\S3):
+  \begin{columns}[T]
+    \begin{column}{0.33\textwidth}
+      \begin{block}{깊이 Depth}
+        속성 수 $k>10^2$, 그리고 서술문 $\mathrm{Narr}(P)$가 그 속성을 정확히 요약.
+      \end{block}
+    \end{column}
+    \begin{column}{0.33\textwidth}
+      \begin{block}{다양성 Diversity}
+        인구 전체에서 속성·값의 분포가 \emph{실제 인간}과 비슷.
+      \end{block}
+    \end{column}
+    \begin{column}{0.33\textwidth}
+      \begin{block}{일관성 Consistency}
+        만들어진 사실들이 논리적으로 \emph{서로 모순되지 않음}.
+      \end{block}
+    \end{column}
+  \end{columns}
+  \smallskip
+  \lead{이 중 \alert{깊이}가 진짜 병목 — DeepPersona의 핵심 기여는 "깊이를 대량으로" 확보한 것.}
+\end{frame}
+
+% ============================================================
+\section{2. 핵심 아이디어 — 2단계 파이프라인}
+% ============================================================
+\begin{frame}{두 단계로 나눈다: 트리를 짓고 $\to$ 트리를 걷는다}
+  \lead{Stage 1은 \alert{속성 트리}(taxonomy)를 한 번 만들고, Stage 2는 그 트리를 걸으며 \alert{사람마다} 페르소나를 채운다.}
+  \begin{center}
+  \begin{tikzpicture}[font=\footnotesize,>=Latex,
+      box/.style={draw=accent,fill=blockbg,rounded corners=3pt,align=center,inner sep=4pt,minimum height=1.9em},
+      lbl/.style={font=\scriptsize\bfseries,text=navy}]
+    % Stage 1
+    \node[lbl] (s1) at (0,2.15) {Stage 1 — 트리 구축 (한 번, 오프라인)};
+    \node[box] (dlg) at (0,1.3) {ChatGPT\\대화 3천건};
+    \node[box,right=0.7cm of dlg] (ext) {속성 구절\\추출};
+    \node[box,right=0.7cm of ext] (mrg) {계층 병합\\+ 검증};
+    \node[box,right=0.7cm of mrg] (tree) {\textbf{속성 트리}\\{\scriptsize 8천 노드}};
+    \draw[->] (dlg)--(ext); \draw[->] (ext)--(mrg); \draw[->] (mrg)--(tree);
+    % Stage 2
+    \node[lbl] (s2) at (0,-0.15) {Stage 2 — 페르소나 생성 (사람마다, 온라인)};
+    \node[box] (seed) at (0,-1.0) {시드 앵커\\{\scriptsize 나이·직업·값}};
+    \node[box,right=0.7cm of seed] (sel) {슬롯 선택\\{\scriptsize 5:3:2}};
+    \node[box,right=0.7cm of sel] (fill) {값 채우기\\{\scriptsize LLM, 깊이우선}};
+    \node[box,right=0.7cm of fill] (prof) {\textbf{페르소나}\\{\scriptsize 200+ 속성}};
+    \draw[->] (seed)--(sel); \draw[->] (sel)--(fill); \draw[->] (fill)--(prof);
+    % 연결: 트리를 Stage 2가 참조
+    \draw[->,orange,thick,dashed] (tree.south) to[out=-90,in=90] (sel.north);
+    \node[orange,font=\scriptsize] at (7.7,0.15) {트리를 참조};
+  \end{tikzpicture}
+  \end{center}
+  \srcnote{논문 Fig.\ 2의 흐름을 코드 관점으로 재구성. 점선 = 만들어 둔 트리를 매 페르소나가 재사용.}
+\end{frame}
+
+\begin{frame}{Stage 2 안을 더 자세히 — 5단계}
+  \intu{시드 인물을 만들고 $\to$ 그 사람에 어울리는 \emph{빈 슬롯}들을 트리에서 골라 $\to$ LLM이 슬롯마다 값을 써 넣는다.}
+  \begin{enumerate}
+    \item \textbf{시드 생성}: 나이·직업·가치관·인생이야기·취미를 먼저 정한다 \hfill{\scriptsize(\pc{based\_data.py})}
+    \item \textbf{시드 임베딩}: 시드 요약문을 \pc{text-embedding-ada-002}로 벡터화
+    \item \textbf{유사도 계산}: 시드 벡터 vs \alert{2,297개 슬롯} 벡터의 코사인 유사도
+    \item \textbf{5:3:2 선택}: 가까움:중간:먼 = 5:3:2 로 슬롯 \alert{200개} 추림 \hfill{\scriptsize(\pc{select\_attributes.py})}
+    \item \textbf{값 채우기}: 고른 슬롯을 LLM에 주고 사람 맞춤 값을 생성 \hfill{\scriptsize(\pc{generate\_profile.py})}
+  \end{enumerate}
+  \smallskip
+  \lead{\alert{매핑 방향이 직관과 반대다.} 값$\to$슬롯 분류가 아니라, 시드 인물$\to$\emph{어울리는 슬롯 발견}이다.}
+  \srcnote{비유: 도서관 책장 라벨 2,297개 중 손님 관심사에 맞는 라벨을 고르고, 그 책장의 책은 작가(LLM)가 새로 쓴다.}
+\end{frame}
+
+\begin{frame}{논문 원본 개요 그림 (Figure 2)}
+  \intu{내 코드지향 도식과 함께 논문의 \emph{공식 개요 그림}도 본다 — 세 패널(대화$\to$트리 / 앵커 / 프로파일).}
+  \origfig{figs/fig2_overview.png}{0.46\textheight}{Fig.\ 2 (Wang et al.). 좌=Process Dataset · 중=Taxonomy Construction(Stage 1) · 우=Generation User Profile(Stage 2).}
+  \srcnote{좌·중 패널 = 모듈 02(트리 구축), 우 패널 = 모듈 03--05(시드$\to$선택$\to$채우기).}
+\end{frame}
+
+% ============================================================
+\section{3. 코드 $\leftrightarrow$ 논문 지도}
+% ============================================================
+\begin{frame}{어느 파일이 논문의 어느 단계인가 (재현의 뼈대)}
+  \lead{재현하려면 "이 파일 = 논문 이 단계"를 외우면 된다. 아래가 그 대응표.}
+  \begin{center}
+  \renewcommand{\arraystretch}{1.25}
+  \footnotesize
+  \begin{tabular}{@{}p{0.30\textwidth} p{0.30\textwidth} p{0.32\textwidth}@{}}
+    \toprule
+    \textbf{코드 (파일/함수)} & \textbf{논문 단계} & \textbf{하는 일} \\
+    \midrule
+    \pc{process\_attributes/} & Stage 1 \S3.1 & 대화$\to$속성 추출·병합·검증 \\
+    \pc{data/large\_attributes.json} & 트리 산출물 & 2,297개 leaf 슬롯(경로) \\
+    \pc{based\_data.py} & \S3.2 앵커 코어 & 나이·직업·값·인생이야기 시드 \\
+    \pc{select\_attributes.py} & \S3.2 다양화 & 임베딩+코사인+\alert{5:3:2} 선택 \\
+    \pc{data/…embeddings.pkl} & 속도 캐시 & 슬롯 벡터 lookup 테이블 \\
+    \pc{generate\_profile.py} & \S3.2 채우기 & 슬롯마다 LLM 값 생성+Summary \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \srcnote{Stage 1은 \emph{한 번}만 돌려 트리를 만들고 커밋해 둠. 평소 생성은 Stage 2(아래 4줄)만 반복.}
+\end{frame}
+
+\begin{frame}{5:3:2 — 코드에서 그대로 확인 (미리보기)}
+  \intu{고른 슬롯을 유사도 순으로 줄 세운 뒤, 위쪽(가까움) 5, 가운데(중간) 3, 아래쪽(먼) 2 비율로 뽑는다. 관련성과 의외성을 동시에.}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+      {\scriptsize\ttfamily
+      \# select\_attributes.py (\S 5:3:2 발췌)\\
+      total\_ratio = 5 + 3 + 2\\
+      near\_count = int(target * 5 / total\_ratio)\\
+      mid\_count\ = int(target * 3 / total\_ratio)\\
+      far\_count\ = int(target * 2 / total\_ratio)\\
+      }
+      \smallskip
+      \begin{itemize}\footnotesize
+        \item \pc{near} = 유사도 상위 1/3 구간에서 표집(관련성)
+        \item \pc{mid} = 가운데 1/3(다양성)
+        \item \pc{far} = 하위 1/3(의외성)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{center}
+      \begin{tikzpicture}[y=0.34em,x=1em,font=\scriptsize]
+        \fill[accent] (0,0) rectangle (5,10); \node[white] at (2.5,5){near 5};
+        \fill[navy]   (0,-11) rectangle (5,-1); \node[white] at (2.5,-6){mid 3};
+        \fill[orange] (0,-22) rectangle (5,-12); \node[white] at (2.5,-17){far 2};
+        \node[anchor=west] at (5.4,5){\tiny 가까움(관련)};
+        \node[anchor=west] at (5.4,-6){\tiny 중간(다양)};
+        \node[anchor=west] at (5.4,-17){\tiny 먼(의외)};
+      \end{tikzpicture}
+      \end{center}
+    \end{column}
+  \end{columns}
+  \srcnote{4번 모듈에서 이 선택 로직을 줄 단위로 해부한다.}
+\end{frame}
+
+% ============================================================
+\section{4. 핵심 수식 2개}
+% ============================================================
+\begin{frame}{수식 1 — 페르소나는 \emph{속성-값 쌍의 집합}}
+  \intu{한 사람 = "(속성, 값)" 짝들의 모음. 예: (나이, 32), (직업, 게임개발자), (취미, 등산).}
+  \[
+    P \;=\; \bigl\{\, \langle a_i,\, v_i \rangle \ \big|\ a_i \in \mathcal{A},\ v_i \in \mathcal{V}_{a_i},\ i=1,\dots,k \,\bigr\}
+  \]
+  \textbf{기호 정의 (하나도 빠짐없이)}
+  \begin{itemize}\small
+    \item $P$ : 한 명의 페르소나(persona). 우리가 만들려는 결과물.
+    \item $a_i$ : $i$번째 \emph{속성}(attribute). 예: "나이", "직업". \pc{large\_attributes.json}의 한 경로.
+    \item $\mathcal{A}$ : 가능한 모든 속성의 우주(트리 전체). $|\mathcal{A}|\approx 2{,}297$ leaf.
+    \item $v_i$ : 그 속성의 \emph{값}(value). 예: 32, "게임개발자". LLM이 생성.
+    \item $\mathcal{V}_{a_i}$ : 속성 $a_i$가 가질 수 있는 값 공간(범주/자유서술/리스트).
+    \item $k$ : 속성 개수(=깊이). DeepPersona는 $k>100$을 목표(코드 기본 200).
+  \end{itemize}
+  \srcnote{논문 식 (1). $\mathcal{A}$=슬롯 우주는 Stage 1이, $v_i$=값은 Stage 2 LLM이 만든다.}
+\end{frame}
+
+\begin{frame}{수식 2 — 한 슬롯씩 \emph{조건부로} 채운다}
+  \intu{앞서 채운 내용($P_{<i}$)을 보고 다음 슬롯을 고르고(selector), 맥락에 맞는 값을 쓴다(generator).}
+  \setlength{\abovedisplayskip}{2pt}\setlength{\belowdisplayskip}{2pt}\small
+  \[
+    P \sim \mathcal{F}_{\theta,T}(\cdot \mid S,k)
+      \;=\; \prod_{i=1}^{k}
+      \underbrace{\Pr\!\bigl(a_i \mid S, P_{<i}, T\bigr)}_{\text{selector (슬롯 고르기)}}
+      \cdot
+      \underbrace{\Pr_{\theta}\!\bigl(v_i \mid a_i, S, P_{<i}\bigr)}_{\text{generator (값 쓰기)}}
+  \]
+  \textbf{기호 정의}
+  \begin{itemize}\footnotesize\setlength{\itemsep}{1pt}
+    \item $S$ : \emph{앵커}. 사용자가 준 시드(나이=35, 직업=간호사 …). \pc{based\_data.py} 산출.
+    \item $T$ : 속성 트리. selector에게 \emph{가능한 슬롯}·균형을 알려 줌. \quad $\theta$ : LLM 파라미터(값 생성기).
+    \item $P_{<i}$ : 지금까지 채운 부분 페르소나(맥락). \quad $\mathcal{F}_{\theta,T}$ : 합성 함수 $(S,k)\mapsto P$.
+  \end{itemize}
+  \lead{두 확률의 곱 = \alert{슬롯 고르기 $\times$ 값 쓰기를 $k$번 반복}(식 2) = 코드의 Stage 2 루프.}
+\end{frame}
+
+% ============================================================
+\section{5. 정리 \& 다음}
+% ============================================================
+\begin{frame}{이 모듈 요약}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{꼭 기억할 것}
+      \begin{itemize}
+        \item 문제 = 페르소나의 \alert{깊이}
+        \item 해법 = \emph{트리 짓고 $\to$ 트리 걷기} (2 stage)
+        \item Stage 2 = 시드$\to$5:3:2 슬롯 선택$\to$LLM 값 채우기
+        \item 매핑은 \alert{인물$\to$슬롯} (값$\to$슬롯 아님)
+        \item \pc{pkl}은 정확도가 아니라 \emph{속도}용 캐시
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{정량 성과 (논문 Table 1)}
+      \begin{center}
+      \renewcommand{\arraystretch}{1.2}\footnotesize
+      \begin{tabular}{@{}lccc@{}}
+        \toprule
+        지표 & PH & OC & \textbf{Ours} \\
+        \midrule
+        평균 속성 수 & 3.98 & 38.5 & \textbf{50.9} \\
+        고유성 & 2.50 & 2.86 & \textbf{4.12} \\
+        실행가능성 & 3.60 & 4.78 & \textbf{5.00} \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+      \smallskip
+      {\scriptsize PH=PersonaHub, OC=OpenCharacter. 다양성 +32\%, 고유성 +44\%.}
+    \end{column}
+  \end{columns}
+  \lead{다음 모듈 \pc{02\_taxonomy}: 이 "트리"가 파일 안에서 어떤 모양인지 연다.}
+\end{frame}
+
+\begin{frame}[standout]
+  모듈 01 끝\\[0.4em]
+  {\normalsize 다음: \texttt{02\_taxonomy} — 속성 트리(Stage 1)}
+\end{frame}
+
+\end{document}

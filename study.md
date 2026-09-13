@@ -561,6 +561,310 @@ Strategy A를 실제로 코딩한다면:
 
 ---
 
+## 13. Pickle 재생성 후 attribute_count sweep과 README 주장 검증
+
+### 13-1. 실행 결과
+
+`scripts/regenerate_embeddings.py` 실행 → 27.05MB 정상 pickle 복구. 직후 smoke test:
+
+| `attribute_count` | 시간 | profile 크기 | 실제 attrs | KB/attr |
+|---|---|---|---|---|
+| 100 (smoke test) | 31.7s | 9.0 KB | 53 | 0.17 |
+| 200 | 38.0s | 13.3 KB | 94 | 0.14 |
+| 300 | 55.7s | 20.1 KB | 145 | 0.14 |
+| **350 (max)** | **74.2s** | **27.4 KB** | **200** | **0.14** |
+
+(이전 broken pickle 상태: 모든 setting에서 1.9 KB / 0 attrs)
+
+### 13-2. README 주장 vs 실제
+
+- README 주장: "~1 MB per persona, narrative-complete", "two orders of magnitude deeper"
+- 실제 max (count=350): **27.4 KB → 1024 KB의 2.7%, 약 37배 격차**
+- 선형 스케일링 일관 (0.14 KB/attr): 1MB 도달하려면 ~7,300 attrs 필요, but taxonomy max는 2,297 leaf path
+
+### 13-3. 격차의 진짜 원인 — generate_profile.py의 카테고리 drop 버그
+
+`selected_paths.json` 조사 결과:
+- 19개 top-level 카테고리, 총 350 leaf path 정상 선택됨
+- 그러나 `generate_profile.py`는 **6개 카테고리만 명시적으로 처리**:
+  - Demographic Information
+  - Career and Work Identity
+  - Core Values, Beliefs, and Philosophy (single specific variant)
+  - Lifestyle and Daily Routine
+  - Cultural and Social Context
+  - Hobbies, Interests, and Lifestyle
+- **나머지 13개가 silently drop**:
+  ```
+  Media Consumption and Engagement
+  Education and Learning
+  Psychological and Cognitive Aspects
+  Physical and Health Characteristics
+  Relationships and Social Networks
+  Emotional and Relational Skills
+  Core Values and Beliefs               ← 거의 중복 variant
+  Core Values and Philosophy            ← 거의 중복 variant
+  Core Values, Beliefs, Philosophy      ← 거의 중복 variant
+  Lifestyle and Routine                 ← 거의 중복 variant
+  Lifestyle and Habits                  ← 거의 중복 variant
+  Cultural and Social Contexts          ← 거의 중복 variant
+  Psychological and Cognitive           ← 거의 중복 variant
+  ```
+- 코드는 `selected_paths.get("Other Attributes")`로 이들을 잡으려 하지만, 실제 데이터는 "Other Attributes" 키 아래로 묶이지 않음 → 분기 매번 fail
+- 19개 중 6개 (32%) 만 처리됨
+
+### 13-4. 격차 분해
+
+| 격차 원인 | 영향 |
+|---|---|
+| 13/19 카테고리 누락 (Other Attributes 분기 bug) | 가장 큼 (×3 손실) |
+| 중복 카테고리 variant 미통합 (`merge_tree.py` 미적용) | 중간 |
+| `_check_if_career_needed`의 가끔 false (Career 전체 skip) | 작음 |
+| Attr당 narrative가 짧음 (~140 byte/attr) | 보통 |
+
+### 13-5. 가능한 개선 → 1MB 목표 추정
+
+- 19개 카테고리 모두 처리 → 27 KB × ~3 = 80~100 KB
+- 중복 variant 통합 후 → 약간 추가 향상
+- LLM verbose 모드 → 200~300 KB
+- **그래도 1MB 미달** → README 광고가 실제 능력보다 과장
+
+### 13-6. 시사점
+
+1. Pickle 재생성으로 vector search 자체는 정상 동작 확인 ✅
+2. README의 "1MB" 주장은 현재 코드 path로는 도달 불가
+3. 다음 bottleneck은 **embedding이 아니라 generate_profile.py의 카테고리 매핑**
+4. 진짜 1MB 달성하려면: (a) 카테고리 매핑 수정 + (b) attribute당 narrative 길이 증가 + (c) taxonomy 정규화 — 모두 필요
+
+---
+
+## 14. Nemotron 1M records vs 7M personas — 단위 혼동 정리
+
+### Q. Nemotron은 700만 개의 페르소나를 포함한 100만 건의 레코드라는데 데이터셋의 숫자가 700만인가 100만인가
+
+**결론**: 사람은 **100만 명**, 한 사람당 7개의 "관점별 페르소나 텍스트"가 있어서 텍스트 블록 단위로는 **700만 개**.
+
+### 14-1. 1 record = 1 person
+
+각 레코드는 한 명의 가상 인물. 26개 필드 중 **7개가 관점별 페르소나 narrative**:
+
+```
+record_001 (= 한 명의 사람, 예: 32세 게임개발자)
+├─ professional_persona  : "수년간 모바일 게임 개발에 종사하며 Unity와 Unreal..."
+├─ sports_persona        : "주말마다 한강에서 자전거를 타고, 풋살 동호회 활동..."
+├─ arts_persona          : "K-인디 음악과 일본 애니메이션을 즐겨 감상..."
+├─ travel_persona        : "도시 여행보다는 자연 명소 선호, 제주도 단골..."
+├─ culinary_persona      : "매운 음식 마니아, 자취 요리를 즐김..."
+├─ family_persona        : "외동아들, 미혼, 부모님과 주 1회 통화..."
+└─ persona               : (위 6개를 합친) 간결한 종합 요약
++ 19개의 attribute/demographic 필드
+```
+
+### 14-2. 산수
+
+- 1,000,000 records × 7 persona 필드 = **7,000,000 텍스트 블록**
+
+### 14-3. 왜 한 인물에 7개나?
+
+| 의도 | 효과 |
+|---|---|
+| 다각도 설명 | 단일 narrative보다 풍부한 컨디셔닝 |
+| 용도별 분리 사용 | "여행 LLM 훈련엔 travel_persona만 추출" 가능 |
+| 필드별 비교 | "직업 narrative 분포" 같은 메타 분석 가능 |
+| 마케팅 임팩트 | "7M personas"라고 강조하면 숫자 커 보임 |
+
+### 14-4. 단위별 정리
+
+| 단위 | 값 | 의미 |
+|---|---|---|
+| 인물 (records) | 1,000,000 | 시뮬레이션 가능한 distinct 사람 수 |
+| 페르소나 텍스트 | 7,000,000 | LLM 컨디셔닝 가능한 narrative 단위 |
+| 토큰 | 1.7B (그중 1B = persona text) | 학습 데이터 부피 |
+| 고유 이름 | 209,167 | 79% 레코드가 동명이인 (실제 한국 작명 패턴 반영) |
+
+### 14-5. DeepPersona와 단위 비교
+
+| | DeepPersona | Nemotron-Korea |
+|---|---|---|
+| 한 사람 = | 1 profile | 1 record |
+| 한 사람의 narrative 블록 수 | 1 (Summary + structured attrs) | 7 (관점별 분리) |
+| narrative당 글자수 | 길고 통합적 (수천 단어) | 짧고 관점별 (수백 단어 × 7) |
+| 사람 수 (현재 코드 기준) | 무한 (매번 새로 생성) | 1M 고정 |
+
+### 14-6. Strategy A에서의 활용
+
+- Nemotron 1M 중 1명 sampling → 7개 persona 텍스트 + 19개 attribute = DeepPersona의 시드(Step 1)로 충분히 풍부
+- 7개 텍스트 모두 시드 summary에 합치면 → ada-002 임베딩이 다각도로 잡힘 → Step 3 cosine search 품질↑
+- 용도별 선택 가능: "직업 시뮬레이션엔 professional_persona만"
+
+### 14-7. 마케팅 워딩 주의
+
+"1M records containing 7M personas"는 두 숫자를 모두 활용한 표현. 실제 distinct 인물은 1M, "페르소나"라는 단어를 narrative 블록 단위로 카운트해 7M로 부풀린 것. 둘 다 사실이지만 단위가 다름.
+
+---
+
+## 15. 응용 비전: 고대 한국인 NPC 생성 (XR 게임/앱)
+
+### Q. 2개 페르소나 방식을 mix하면서 궁극적으로 "백제, 신라 등 특정 시대 우리민족 모사(7세기 통일신라인, 4세기 백제인 등)"하는 다수 고대인 에이전트 생성. XR 기반 게임/앱에서 NPC로 그 시대 사람처럼 행동·대화. 어떻게 추가 구현할까?
+
+이건 단순 데이터셋 혼용을 넘어 **"시대 변환(temporal transcoding)"** 이라는 새 문제 카테고리.
+
+### 15-1. 핵심 도전 과제 5가지
+
+| 도전 | 본질 | 난이도 |
+|---|---|---|
+| **1. 시대 적합성** | 현대 LLM은 21세기 사고에 saturated. 7C 신라인은 민주주의/개인주의/과학 개념 없음 | ★★★★★ |
+| **2. 데이터 희소성** | Nemotron=2024 통계, DeepPersona=영어 ChatGPT mining → 둘 다 고대 학습 없음 | ★★★★★ |
+| **3. Schema 재설계** | 신분(골품/육두품), 신앙(불교/도교/무속), 가문, 부족 정체성 등 현대 26필드와 무관 | ★★★★ |
+| **4. 행동 fidelity** | 말투 + 결정 + 금기 + 세계관 + 신화적 시간감각 일관성 | ★★★★ |
+| **5. XR 런타임 제약** | NPC 응답 < 2초, 다수 동시 대화, 음성 출력, 메모리 한정 | ★★★ |
+
+### 15-2. 전략 옵션 6가지
+
+#### Strategy α — Prompt Conditioning Only (가장 빠름)
+- 기존 DeepPersona 파이프라인 그대로, prompt에만 "7세기 신라인" 컨디션 강제
+- Step 5 LLM에 system prompt: "이 사람은 7C 통일신라인. 골품제 인식, 불교, 농경, 화랑 정신..."
+- **Pros**: 코드 변경 거의 없음, 즉시 시도 가능
+- **Cons**: 모던 슬롯("Tech.AI tool usage")이 그대로 남아 anachronism, 모델 bias 새어나옴
+- **적합도**: prototype, 데모용
+
+#### Strategy β — Era-Specific Taxonomy 구축
+- DeepPersona의 `large_attributes.json` 자리에 **고대 한국 attribute 트리** 새로 구축
+- 예시 구조:
+  ```
+  사회적 정체성.골품제.출신골품 (성골/진골/육두품/오두품/...)
+  사회적 정체성.가문.부 (왕족/육부귀족/지방호족/평민/노비)
+  신앙체계.불교종파 (화엄/유식/계율/...)
+  신앙체계.토속신앙 (산신/조상신/단군계)
+  생업.농경/유목/장인/상인/관직
+  세계관.천하관 (당-신라-왜의 위계 인식)
+  관습.혼인제 (근친혼/족외혼)
+  지식.문자 (한문/이두/구어만)
+  ...
+  ```
+- **Pros**: 진정한 시대 충실성, vector search가 시대 적합 슬롯만 선택
+- **Cons**: 한국 고대사 전문가 협업 필요, 수십 시간 mining
+- **적합도**: 본격 연구, 박물관 협업
+
+#### Strategy γ — Historical Demographic Anchor
+- Nemotron의 KOSIS 접근을 고대 한국에 적용
+- 추정 분포로 anchor 분포표 작성 (`silla_7c_anchors.json` 같은 형태)
+- 학술적 인구 추정 (인구 50-100만명, 신분 분포 1:9:90 추정 등)
+- **Pros**: 통계적 grounding, scale 가능
+- **Cons**: KOSIS만큼 정밀한 통계 없음 — 학계 추정치 의존
+
+#### Strategy δ — RAG로 사료 기반 증강
+- 사료(삼국사기/삼국유사/일본서기/화랑세기) + 학술논문을 vector DB화
+- 각 attribute 생성 시 시대 관련 passage 검색해 LLM에 주입
+- **Pros**: 사실성↑, 검증 가능 ("이 NPC의 이 발화는 어느 사료에 근거?")
+- **Cons**: 사료가 귀족 중심 → 평민 NPC는 RAG 빈약, 한문→한국어 처리 필요
+
+#### Strategy ε — 도메인 특화 LLM 파인튜닝
+- 사극/고전소설/번역사료/학술논문으로 작은 모델(7B급) 파인튜닝
+- 페르소나 생성과 런타임 대화 모두 이 모델로
+- **Pros**: 시대 mindset 내재화, on-device 가능 → XR latency↓
+- **Cons**: 데이터 큐레이션이 가장 큰 작업, base 모델 bias 잔존
+
+#### Strategy ζ — Multi-stage Hybrid (장기 비전)
+```
+Stage 1: γ로 인물 anchor 샘플링 (신분/지역/시대 정합)
+Stage 2: β의 고대 taxonomy + Step 3-5는 DeepPersona pipeline
+Stage 3: δ로 각 attribute에 사료 인용 주입
+Stage 4: ε의 fine-tuned 모델로 런타임 대화
+```
+- **Pros**: 모든 측면 커버
+- **Cons**: 1-2년 프로젝트 규모, 초기 투자 큼
+
+### 15-3. 전략 매트릭스
+
+| 우선순위 | 추천 전략 | 이유 |
+|---|---|---|
+| 빨리 데모/PoC 보고 싶다 | α + 약간의 β | 1주일 안에 prototype 가능 |
+| 연구/논문/투자 유치 | β + δ | 차별성 있는 결과물, 사료 인용 가능 |
+| 실제 출시 가능한 XR 앱 | ζ 축소판 (α+β+ε 일부) | 품질-비용-속도 균형 |
+| 장기 핵심 자산 구축 | β + ε | 한국 고대 LLM이라는 platform 자산 |
+
+### 15-4. NPC 행동 (런타임 — 별개 문제)
+
+페르소나 **생성**과 **운영 시 대화**는 분리해서 봐야 함:
+
+| 컴포넌트 | 관심사 | 옵션 |
+|---|---|---|
+| **말투** | 사극체 / 현대어 단순화 / 한자어 비율 | 시스템 프롬프트로 통제 가능 |
+| **지식 경계** | "스마트폰" 같은 단어를 모름. 천문은 알지만 지동설은 모름 | 페르소나에 `knowledge_horizon` 필드 추가, LLM에 "이 사람이 모르는 것" 명시 |
+| **결정 동기** | 충성/효/신분/불심/실리 중 어떤 게 dominant? | Big Five 대신 **시대 가치 5축** 설계 |
+| **세계관** | 천하관, 시간감(불교 윤회/유교 천명), 공간감(당-신라-왜) | 페르소나에 `worldview_axioms` 필드 |
+| **금기/터부** | 신분 무시한 발화 거부, 왕족 모욕 격노, 특정 음식/색 회피 | constraint list로 LLM 응답 필터 |
+| **언어 출력** | TTS는 사극톤 한국어 정도가 현실적 | 별도 음성 파이프라인 |
+
+→ 페르소나 JSON에 **behavioral spec**을 함께 저장해 runtime에 system prompt로 주입.
+
+### 15-5. XR/게임 통합 고려사항
+
+- **Latency**: 대화 응답 < 2초 필요 → 7B-13B 모델 로컬 추론, 또는 GPT-4o-mini 류 API + 짧은 응답
+- **다수 NPC**: 페르소나 JSON 캐싱, 대화 시작 시 lazy load
+- **세션 memory**: 짧은 conversation history만 유지, 장기는 episodic memory로 요약
+- **음성**: 사극톤 TTS는 ElevenLabs voice cloning 가능 (한국 성우 데이터로)
+- **시각**: 별도 — Stable Diffusion + 시대고증 ControlNet, MotionGPT 등
+
+### 15-6. 권장: 4-Phase 점진 접근
+
+```
+[Phase 1, 1-2주] Strategy α + Nemotron 시드 변환 실험
+  - 기존 DeepPersona를 그대로 돌리되, Nemotron 시드(현대 한국인)를
+    프롬프트로 "7C 신라인으로 컨버전"
+  - 결과 NPC와 대화해보고 어디서 깨지는지 정성 평가
+  - 산출: PoC NPC 5-10명, "anachronism heatmap"
+
+[Phase 2, 2-4주] Strategy β의 첫 버전 — 고대 taxonomy 1.0
+  - 한국사 전공자/사학과 학생 1명과 협업
+  - 50-100개 핵심 attribute부터 시작 (골품, 신분, 신앙, 생업, ...)
+  - DeepPersona pipeline은 그대로, taxonomy만 교체
+  - 산출: silla_7c_attributes.json, 다시 생성한 NPC 10명
+
+[Phase 3, 1-2개월] γ + δ 결합
+  - 신분/지역 추정 분포로 anchor table 작성
+  - 삼국사기/삼국유사 chunking + embedding → RAG 시스템
+  - attribute 생성 단계마다 관련 사료 인용 주입
+  - 산출: 50-200명 cohort, 사료 인용 추적 가능한 NPC
+
+[Phase 4, 3-6개월] ε의 일부 — runtime 모델 fine-tune
+  - Phase 1-3에서 생성한 페르소나 + 대화 로그 + 사료를 학습 데이터화
+  - 7B 모델 (Llama/Qwen) 파인튜닝
+  - On-device 추론 가능 → XR 런타임 적합
+  - 산출: 'silla_npc_chat-7b' 모델 + 100-500 NPC 카탈로그
+```
+
+### 15-7. 가장 작은 첫 걸음 (이번 주 가능)
+
+**한 가지를 시작한다면**: Phase 1의 첫 실험.
+
+```python
+# 1. 현 DeepPersona 파이프라인에 era prompt만 주입
+#    generate_profile.py의 LLM 호출에 시스템 메시지 추가:
+SYSTEM = """이 페르소나는 7세기 통일신라 사람입니다.
+- 골품제(성골/진골/육두품/오두품/사두품) 인식
+- 불교, 농경사회, 화랑정신, 당과의 외교 의식
+- 스마트폰/자동차/민주주의/과학 같은 현대 개념은 모름"""
+
+# 2. attribute_count=200 으로 3명 생성
+# 3. 각 페르소나의 attribute를 읽고:
+#    - 시대 맞는 것 / 맞지 않는 것 분류
+#    - 어떤 슬롯이 anachronism의 원흉인지 식별
+#    → β 단계에서 어떤 슬롯을 만들고/없앨지 가이드
+```
+
+이 실험 결과만 봐도 본 프로젝트가 어떤 부분에서 가장 무너지는지 (taxonomy vs LLM bias vs schema), 다음 투자 우선순위가 명확해짐.
+
+### 15-8. 요약
+
+| 시점 | 추천 |
+|---|---|
+| 이번 주 | **α** 실험으로 anachronism map 파악 |
+| 1-3개월 | **β + γ + δ** 결합으로 고대 한국 페르소나 생성기 구축 |
+| 반년+ | **ε** 파인튜닝으로 XR 런타임 자산화 |
+
+---
+
 ## 진행된 커밋 요약
 
 | Commit | 내용 |
@@ -569,19 +873,32 @@ Strategy A를 실제로 코딩한다면:
 | `0331651` | `.env` 기반 secret loading (5개 파일) |
 | `ab13f8a` | 하드코딩 `/home/zhou` 경로 제거 (5개 파일) |
 | `f864d2f` | import-time 부수효과 버그 fix + smoke test script |
+| `916633a` | 손상 pickle 재생성 (27MB, 2,297 × 1,536) + study.md 추가 |
 
 ## 미해결 / 다음 단계
 
 **Runtime 복구**
-- [ ] `data/attribute_embeddings.pkl` 재생성 (text-embedding-ada-002, 약 $0.003)
-- [ ] 재생성 후 smoke test 다시 돌려 1MB 정상 profile 확인
+- [x] `data/attribute_embeddings.pkl` 재생성 — 27.05MB, 정상 로드 확인 (916633a)
+- [x] 재생성 후 smoke test 재실행 — 1.9KB → 9.0KB (count=100), 27.4KB (count=350)
 - [ ] (선택) upstream `thzva/Deeppersona`에 pickle 손상 이슈 보고
+
+**§13에서 도출된 generate_profile.py 버그**
+- [ ] 13/19 카테고리 drop 문제 수정 — generate_profile.py가 하드코딩된 6개 카테고리 대신 selected_paths의 모든 top-level 키를 동적으로 처리하도록 변경
+- [ ] (선택) `merge_tree.py` 실행해 거의 중복인 카테고리 variant들 통합
+- [ ] 수정 후 attribute_count sweep 재실행해 80~100KB 도달 확인
 
 **전략 실행** (§10-12에서 도출)
 - [ ] Strategy A 구현 — `based_data.py` → `nemotron_anchor.py` 대체로 한국어 깊은 페르소나 생성
 - [ ] Strategy A의 미세 문제 해결 (시드 텍스트 구성 + 언어 mismatch 보정 + 한국 고유 슬롯 보강)
 - [ ] (장기) Strategy B — Nemotron 1M에서 한국 문화 attribute 채굴해 taxonomy 확장
 
+**고대 한국 NPC 프로젝트** (§15에서 도출)
+- [ ] Phase 1 — Strategy α PoC: era system prompt만 주입해 5-10명 신라/백제 NPC 생성, anachronism heatmap 작성
+- [ ] Phase 2 — 고대 한국 taxonomy v0.1 (50-100 attribute) 설계
+- [ ] Phase 2 보조 — 사학과 전공자 협업 채널 확보
+- [ ] (중기) Phase 3 — 사료 RAG 인덱싱 + γ anchor table
+- [ ] (장기) Phase 4 — 7B 모델 fine-tune for XR runtime
+
 **Code hygiene** (선택)
-- [ ] Taxonomy 정리 — `Core Values and Beliefs` / `Core Values and Philosophy` / `Core Values, Beliefs, and Philosophy` 같은 거의 중복 카테고리 통합 (이미 `merge_tree.py` 존재)
 - [ ] `extract_personalized_attributes.py:20` 등에 남아있을 수 있는 dataset 시점 path 잔재 확인
+- [ ] sweep script (`scripts/test_attribute_count_sweep.py`) 커밋 여부 결정

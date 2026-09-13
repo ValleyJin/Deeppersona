@@ -1,0 +1,309 @@
+% !TEX program = xelatex
+% DeepPersona 코드 학습교재 — 모듈 04: 임베딩 + 5:3:2 선택 (select_attributes.py, Step 2-4)
+\documentclass[aspectratio=169,10pt]{beamer}
+\usetheme{metropolis}
+\metroset{block=fill,numbering=fraction,progressbar=frametitle,sectionpage=progressbar}
+\usepackage{kotex}\usepackage{fontspec}
+\setmainhangulfont{Apple SD Gothic Neo}\setsanshangulfont{Apple SD Gothic Neo}\setmonofont{D2Coding}
+\usepackage{booktabs}\usepackage{array}\usepackage{graphicx}\usepackage{amssymb}\usepackage{amsmath}
+\usepackage{tikz}\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usepackage{listings}
+
+\definecolor{accent}{HTML}{0E7C7B}\definecolor{navy}{HTML}{004191}\definecolor{orange}{HTML}{F97316}
+\definecolor{ink}{HTML}{20242A}\definecolor{muted}{HTML}{5A6472}\definecolor{blockbg}{HTML}{EDF1F6}
+\definecolor{codebg}{HTML}{E7ECF3}\definecolor{kw}{HTML}{0D6E6E}\definecolor{str}{HTML}{A8410F}\definecolor{com}{HTML}{5A6472}
+\setbeamercolor{progress bar}{fg=accent}\setbeamercolor{title separator}{fg=accent}\setbeamercolor{frametitle}{bg=accent}
+\setbeamercolor{alerted text}{fg=orange}\setbeamercolor{block title}{bg=blockbg,fg=ink}\setbeamercolor{block body}{bg=blockbg!55,fg=ink}
+
+\newcommand{\lead}[1]{\vspace*{0.6em}{\setlength{\fboxsep}{9pt}\noindent\colorbox{accent!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textcolor{accent}{\textbf{한눈에}}\hspace{0.6em}#1}}}\par\vspace{1.15em}}
+\newcommand{\intu}[1]{\vspace*{0.2em}{\setlength{\fboxsep}{7pt}\noindent\colorbox{navy!8}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textcolor{navy}{\textbf{쉽게 말하면}}\hspace{0.6em}#1}}}\par\vspace{0.5em}}
+\newcommand{\srcnote}[1]{\vspace{0.35em}\par{\footnotesize\color{navy}$\blacktriangleright$~#1}}
+\newcommand{\pc}[1]{\tikz[baseline=(pcb.base)]{\node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize #1};}}
+\newcommand{\origfig}[3]{\IfFileExists{#1}{\begin{center}\includegraphics[height=#2]{#1}\\[2pt]{\scriptsize\color{muted}#3}\end{center}}{\begin{center}\setlength{\fboxsep}{8pt}\fbox{\parbox{0.82\textwidth}{\centering\footnotesize\color{muted}[원본 그림 자산 없음]\\[2pt]\texttt{#1}\\[2pt]#3}}\end{center}}}
+\lstdefinestyle{py}{basicstyle=\ttfamily\scriptsize,backgroundcolor=\color{codebg!55},keywordstyle=\color{kw}\bfseries,stringstyle=\color{str},commentstyle=\color{com}\itshape,language=Python,showstringspaces=false,breaklines=true,frame=leftline,framerule=1.4pt,rulecolor=\color{accent},xleftmargin=12pt,aboveskip=3pt,belowskip=2pt,tabsize=2}
+
+\title{DeepPersona 코드 학습교재}
+\subtitle{모듈 04 — 임베딩 + \texttt{5:3:2} 선택: \texttt{select\_attributes.py} (Step 2--4)}
+\author{학습 정리 덱 (Claude와 함께)}
+\institute{원저: Wang et al., \textit{DeepPersona} (arXiv:2511.07338) · 논문 \S3.2 "Balanced diversification"}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{frame}{이 모듈의 목표}
+  \lead{시드에 어울리는 슬롯 200개를 2,297개 중에서 고른다 — 관련성과 의외성을 \alert{5:3:2}로 섞어서.}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \small\textbf{얻는 것}
+      \begin{itemize}
+        \item 시드$\to$요약$\to$\pc{ada-002} 벡터
+        \item \pc{pkl} 캐시가 하는 일(속도)
+        \item \alert{코사인 유사도}(수식+코드)
+        \item \alert{5:3:2} 선택 로직 줄별 해부
+        \item 카테고리별 비례 배분
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \small\textbf{핵심 통찰}
+      \begin{itemize}
+        \item near = 상위 1/3 \alert{결정적}, mid·far = 각 1/3에서 \alert{랜덤}
+        \item 페르소나당 임베딩 API \alert{단 1번}(캐시 덕)
+        \item pkl 깨지면 선택이 \alert{전부 실패}$\to$빈 프로필
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \srcnote{이 모듈이 식 (2)의 \emph{selector} $\Pr(a_i\mid S,P_{<i},T)$에 해당.}
+\end{frame}
+
+\begin{frame}{순서}\tableofcontents\end{frame}
+
+% ============================================================
+\section{1. 문제 — 200개를 어떻게 고르나}
+% ============================================================
+\begin{frame}{관련성만? 랜덤만? \alert{둘 다 아니다}}
+  \intu{시드와 가까운 슬롯만 고르면 뻔한 인물(판박이). 아무거나 고르면 앞뒤가 안 맞음. 그 사이의 균형이 필요.}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{alertblock}{가까운 것만 (관련성 100\%)}
+        게임개발자 $\to$ 전부 "코딩·게임·기술" 슬롯. \emph{깊지만 뻔함}(다양성 없음).
+      \end{alertblock}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{alertblock}{랜덤 (관련성 0\%)}
+        게임개발자에 "양봉·발레·심해잠수" 슬롯. \emph{다양하지만 뜬금없음}(일관성 없음).
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+  \begin{exampleblock}{DeepPersona의 답 — \alert{5:3:2}}
+    가까움 5 : 중간 3 : 먼 2 로 섞어, 관련성(깊이)과 의외성(다양성)을 \emph{동시에}. 논문 "Balanced attribute diversification".
+  \end{exampleblock}
+  \lead{핵심 함수 \pc{\_find\_interesting\_neighbors} — "흥미로운 이웃 찾기".}
+\end{frame}
+
+% ============================================================
+\section{2. 임베딩 준비}
+% ============================================================
+\begin{frame}[fragile]{시드 $\to$ 요약 텍스트 $\to$ 벡터}
+  {\scriptsize 파일: \pc{select\_attributes.py} · \texttt{\_extract\_profile\_summary()} + \texttt{\_create\_profile\_embedding()}}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+# 1) 시드 dict -> 한 덩어리 요약 문자열
+summary_parts.append(f"Age: {age}");  summary_parts.append(f"Gender: {gender}")
+summary_parts.append(f"Location: {city}, {country}")
+summary_parts.append(f"Career Status: {status}");  summary_parts.append(f"Values: {values}")
+# ... attitude / story 등도 추가 -> "\n".join(summary_parts)
+# 2) 그 문자열을 임베딩
+response = client.embeddings.create(model="text-embedding-ada-002",
+                                    input=profile_summary)
+embedding = np.array(response.data[0].embedding)   # 1536차원 벡터
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{요약}: 시드의 나이·성별·위치·직업·가치관·태도·이야기를 \pc{"키: 값"} 줄로 이어붙임.
+    \item \textbf{임베딩}: 그 요약문을 \pc{text-embedding-ada-002}에 넣어 \alert{1536차원 벡터} 1개를 얻음.
+    \item \textbf{의미}: 이 벡터가 "이 사람은 의미공간의 여기쯤"이라는 좌표. 슬롯들과의 거리를 잴 기준점.
+    \item \textbf{비용}: 페르소나당 \alert{이 호출 딱 1번}(시드는 사람마다 다르므로 캐시 불가).
+  \end{itemize}
+  \srcnote{한국어 시드라면 여기서 영어 번역을 한 번 끼우면 정확도↑(study.md \S12-3).}
+\end{frame}
+
+\begin{frame}[fragile]{\pc{pkl} 캐시 — 슬롯 벡터를 미리 계산해 둔다}
+  {\scriptsize 파일: \pc{select\_attributes.py} · \texttt{\_load\_embeddings()} + \texttt{path\_to\_embedding} 매핑}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+with open(EMBEDDINGS_PATH, 'rb') as f:
+    embeddings_data = pickle.load(f)      # {'paths':[...], 'embeddings': ndarray}
+self.paths      = embeddings_data['paths']       # 2297개 슬롯 경로 문자열
+self.embeddings = embeddings_data['embeddings']  # (2297, 1536) float 배열
+for i, path in enumerate(self.paths):
+    self.path_to_embedding[path] = self.embeddings[i]   # 경로 -> 벡터 dict
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{구조}: \pc{paths}(2,297개 슬롯 문자열) + \pc{embeddings}(2,297$\times$1,536 ndarray)가 짝.
+    \item \textbf{\pc{path\_to\_embedding}}: "슬롯 경로 $\to$ 그 벡터" 사전. 이후 \alert{dict lookup}으로 즉시 조회.
+    \item \textbf{왜 캐시}: 슬롯 2,297개 텍스트는 \emph{모든 페르소나가 공유}·불변 $\to$ 한 번 임베딩해 저장.
+  \end{itemize}
+  \begin{center}\footnotesize
+  \renewcommand{\arraystretch}{1.1}
+  \begin{tabular}{@{}lcc@{}}\toprule
+    페르소나 1개당 & 캐시 없음 & 캐시(pkl) \\\midrule
+    슬롯 임베딩 호출 & 2,297번 & \alert{0번}(lookup) \\
+    시드 임베딩 호출 & 1번 & 1번 \\
+    10만 개 생성 비용 & \$23,000 & \alert{\$10} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \srcnote{이 pkl이 깨지면(원본 repo 결함) 선택이 전부 실패 $\to$ 빈 프로필(§5, study.md \S6).}
+\end{frame}
+
+\begin{frame}[fragile]{코사인 유사도 — 두 벡터의 \alert{방향} 닮음}
+  \intu{두 화살표(벡터)가 같은 방향을 보면 1, 직각이면 0, 반대면 $-1$. 시드와 슬롯이 "의미상 얼마나 같은 쪽"인지를 잰다.}
+  \[
+    \cos(\theta)=\frac{\mathbf{v_1}\cdot\mathbf{v_2}}{\lVert \mathbf{v_1}\rVert\,\lVert \mathbf{v_2}\rVert}
+    =\frac{\sum_i v_{1i}v_{2i}}{\sqrt{\sum_i v_{1i}^2}\,\sqrt{\sum_i v_{2i}^2}}
+  \]
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{itemize}\footnotesize
+        \item $\mathbf{v_1}$ : 시드 벡터, $\mathbf{v_2}$ : 슬롯 벡터(각 1536차원).
+        \item 분자 $\mathbf{v_1}\cdot\mathbf{v_2}$ : 내적(같은 성분끼리 곱해 합).
+        \item 분모 $\lVert\cdot\rVert$ : 벡터 길이(정규화) $\to$ 크기 아닌 \emph{방향}만 비교.
+        \item 값 범위 $[-1,1]$, 클수록 \alert{의미상 가까움}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+norm1 = np.linalg.norm(vec1)
+norm2 = np.linalg.norm(vec2)
+if norm1==0 or norm2==0: return 0.0
+return np.dot(vec1, vec2)/(norm1*norm2)
+\end{lstlisting}
+      {\scriptsize $\to$ 코드가 위 수식 그대로. 0벡터는 0으로 방어.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+\section{3. 5:3:2 선택 로직}
+% ============================================================
+\begin{frame}[fragile]{\pc{\_find\_interesting\_neighbors} — 정렬 후 3등분}
+  {\scriptsize 파일: \pc{select\_attributes.py} · 핵심 발췌}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+# 각 슬롯의 시드 대비 유사도 계산 -> 내림차순 정렬
+path_similarities.sort(key=lambda x: x[1], reverse=True)
+total_paths = len(path_similarities)
+total_ratio = 5 + 3 + 2                                   # = 10
+# near: 상위 1/3에서 5/10 (결정적 상위)
+near_count = min(int(target_count*5/total_ratio), total_paths//3)
+near_indices = list(range(near_count))                    # 0 .. near_count
+# mid: 가운데 1/3에서 3/10 (랜덤)
+mid_start, mid_end = total_paths//3, 2*total_paths//3
+mid_count = min(int(target_count*3/total_ratio), mid_end-mid_start)
+# far: 하위 1/3에서 2/10 (랜덤)
+far_start = 2*total_paths//3
+far_count = min(int(target_count*2/total_ratio), total_paths-far_start)
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{정렬}: 슬롯을 시드 유사도 \emph{내림차순}으로 줄 세움(0번=가장 가까움).
+    \item \textbf{3등분}: 인덱스를 \pc{[0,N/3)}(near) · \pc{[N/3,2N/3)}(mid) · \pc{[2N/3,N)}(far)로 나눔.
+    \item \textbf{개수}: 목표 200이면 near 100 · mid 60 · far 40(=5:3:2). 단 구간 크기 초과 못 함(\pc{min}).
+  \end{itemize}
+  \srcnote{이어서 각 구간에서 실제로 뽑는 방식(near=상위 그대로, mid/far=랜덤 표집)이 다음 장.}
+\end{frame}
+
+\begin{frame}[fragile]{각 구간에서 \alert{어떻게} 뽑나 — near는 결정적, mid·far는 랜덤}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+# near: 상위 near_count개를 (순서만 섞어) 그대로
+for i in random.sample(near_indices, min(near_count, len(near_indices))):
+    selected_paths.append(path_similarities[i][0])
+# mid / far: 각 구간 인덱스에서 random.sample 로 무작위 추출
+for i in random.sample(mid_indices, min(mid_count, len(mid_indices))): ...
+for i in random.sample(far_indices, min(far_count, len(far_indices))): ...
+# 아직 target 미달이면 남은 인덱스에서 랜덤 보충
+remaining = target_count - len(selected_paths)
+\end{lstlisting}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \begin{itemize}\footnotesize
+        \item \textbf{near}: 상위 \pc{near\_count}개를 \emph{전부}(관련성은 놓치면 안 되니 결정적).
+        \item \textbf{mid·far}: 해당 1/3 \emph{구간 안에서 무작위}로 뽑음 $\to$ 사람마다 달라져 다양성↑.
+        \item \textbf{보충}: 셋을 합쳐도 200 미달이면 남은 슬롯에서 랜덤 채움.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \begin{center}
+      \begin{tikzpicture}[y=0.22em,x=1em,font=\scriptsize]
+        \fill[accent] (0,0) rectangle (4,10); \node[white] at (2,5){near};
+        \node[anchor=west,font=\tiny] at (4.3,5){상위 1/3 \emph{전부}};
+        \fill[navy] (0,-12) rectangle (4,-1); \node[white] at (2,-6){mid};
+        \node[anchor=west,font=\tiny] at (4.3,-6){가운데서 랜덤};
+        \fill[orange] (0,-24) rectangle (4,-13); \node[white] at (2,-18){far};
+        \node[anchor=west,font=\tiny] at (4.3,-18){아래서 랜덤};
+      \end{tikzpicture}
+      \end{center}
+    \end{column}
+  \end{columns}
+  \lead{같은 직업이어도 mid·far가 달라 \alert{서로 다른 200 슬롯}이 된다(비교가능성 trade-off).}
+\end{frame}
+
+% ============================================================
+\section{4. 카테고리별 배분}
+% ============================================================
+\begin{frame}[fragile]{200개를 카테고리에 \alert{비례} 배분}
+  {\scriptsize 파일: \pc{select\_attributes.py} · \texttt{get\_top\_attributes()}}
+\begin{lstlisting}[style=py,numbers=none,basicstyle=\ttfamily\tiny]
+for category, paths in category_paths.items():
+    category_ratio  = len(paths) / len(all_paths)        # 이 카테고리 비중
+    category_target = max(3, int(target_count*category_ratio))  # 최소 3개 보장
+    category_selected = self._find_interesting_neighbors(  # 카테고리별 5:3:2
+        profile_embedding, paths, category_target)
+    final_paths.extend(category_selected)
+if len(final_paths) > target_count:                      # 초과분 랜덤 삭감
+    final_paths = random.sample(final_paths, target_count)
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item \textbf{비례}: 큰 카테고리(슬롯 많은)일수록 더 많이 배정. \pc{category\_ratio} = 그 카테고리 슬롯 / 전체.
+    \item \textbf{최소 보장}: \pc{max(3, ...)}로 작은 카테고리도 최소 3개는 나오게.
+    \item \textbf{5:3:2는 카테고리마다}: 각 카테고리 안에서 \pc{\_find\_interesting\_neighbors}를 따로 호출.
+    \item \textbf{삭감}: 합이 200 초과면 무작위로 줄여 정확히 맞춤.
+  \end{itemize}
+  \srcnote{추천 카테고리는 \pc{process\_profile()}가 정함(\pc{\_check\_if\_career\_needed}로 Career 제외 가능).}
+\end{frame}
+
+% ============================================================
+\section{5. 실패 모드 \& 재현}
+% ============================================================
+\begin{frame}{pkl이 깨지면 — \alert{조용히} 빈 프로필}
+  \intu{임베딩 캐시가 없거나 손상되면 선택 함수가 빈 리스트를 반환하고, 페르소나엔 속성이 하나도 안 남는다.}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \textbf{연쇄}
+      \begin{itemize}\footnotesize
+        \item \pc{\_load\_embeddings()} 실패 $\to$ \pc{None}
+        \item \pc{\_find\_interesting\_neighbors}: "벡터DB 없음" $\to$ \pc{return []}
+        \item \pc{get\_top\_attributes}: \pc{return []}
+        \item 결과 프로필 \alert{1.9KB}(정상 $\sim$27KB), 속성 0개
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{alertblock}{로그 신호}
+        {\scriptsize\ttfamily pickle data was truncated\\ 没有可用的向量数据库\dots 返回空列表}
+      \end{alertblock}
+      {\footnotesize $\Rightarrow$ 재현하려면 \pc{attribute\_embeddings.pkl}이 \alert{반드시} 정상이어야 함.}
+    \end{column}
+  \end{columns}
+  \lead{재현 체크: pkl 로드 성공 확인 $\to$ 실패 시 \pc{scripts/regenerate\_embeddings.py}로 재생성(모듈 06).}
+  \srcnote{원본 repo의 pkl은 6.8MB로 잘려 있었음(정상 27MB). study.md \S6 forensic 분석 참조.}
+\end{frame}
+
+\begin{frame}{이 모듈 요약}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{꼭 기억할 것}
+      \begin{itemize}
+        \item 시드$\to$요약$\to$\pc{ada-002} 벡터 1개
+        \item 슬롯 벡터는 \pc{pkl}에 캐시(lookup)
+        \item 유사도=\alert{코사인}(방향 닮음)
+        \item \alert{5:3:2}: near 결정적, mid·far 랜덤
+        \item 카테고리별 비례 배분 후 200 맞춤
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{함수 지도}
+      \begin{itemize}\footnotesize
+        \item \pc{generate\_user\_profile} (시드, 모듈 03)
+        \item \pc{get\_selected\_attributes} (진입점)
+        \item \pc{\_extract\_profile\_summary} / \pc{\_create\_profile\_embedding}
+        \item \pc{\_compute\_cosine\_similarity}
+        \item \pc{\_find\_interesting\_neighbors} (5:3:2)
+        \item \pc{get\_top\_attributes} (배분)
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \lead{다음 \pc{05\_generate\_profile}: 고른 슬롯에 LLM이 \alert{값}을 채우고 Summary를 쓴다(Step 5).}
+\end{frame}
+
+\begin{frame}[standout]
+  모듈 04 끝\\[0.4em]
+  {\normalsize 다음: \texttt{05\_generate\_profile} — 깊이우선 값 채우기 (Step 5)}
+\end{frame}
+
+\end{document}
