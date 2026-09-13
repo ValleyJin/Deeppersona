@@ -21,6 +21,7 @@
 \usepackage{amsmath}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usepackage{listings}
 
 % ===== 팔레트 (LATEX_정책 §1: kaistblue/teal + accent 주황) =====
 \definecolor{accent}{HTML}{0E7C7B}     % teal (기본 강조·progress)
@@ -56,7 +57,7 @@
 \newcommand{\pc}[1]{%
   \tikz[baseline=(pcb.base)]{%
     \node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,%
-          outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize #1};}}
+          outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize\color{ink} #1};}}
 % ===== 원본 논문 그림 삽입 (자산 없으면 안내 박스) — 정책 §2.1 =====
 % #1=경로 #2=height #3=캡션. 저작권 자료라 저장소 미포함, 로컬 빌드에서만 표시.
 \newcommand{\origfig}[3]{%
@@ -216,6 +217,25 @@
   \smallskip
   \lead{\alert{매핑 방향이 직관과 반대다.} 값$\to$슬롯 분류가 아니라, 시드 인물$\to$\emph{어울리는 슬롯 발견}이다.}
   \srcnote{비유: 도서관 책장 라벨 2,297개 중 손님 관심사에 맞는 라벨을 고르고, 그 책장의 책은 작가(LLM)가 새로 쓴다.}
+\end{frame}
+
+\begin{frame}[fragile]{"슬롯 벡터"가 구체적으로 뭔가 — 실제 예시}
+  \intu{슬롯 = 트리의 잎(\pc{X.Y.Z} 경로 \emph{문자열}). 그 문자열을 ada-002에 넣어 나온 \alert{1,536개 숫자}가 "슬롯 벡터"다.}
+\begin{lstlisting}[language=,numbers=none,basicstyle=\ttfamily\tiny,backgroundcolor=\color{codebg!55},frame=leftline,framerule=1.4pt,rulecolor=\color{accent},xleftmargin=10pt]
+"Emotional and Relational Skills.Patience.level"
+        | text-embedding-ada-002
+        v
+   [ 0.013, -0.021, 0.008, ... , 0.005 ]   <- 1,536개 실수 (1개 슬롯 벡터)
+
+"Hobbies, Interests, and Lifestyle.Cuisine.AffinityDistribution" -> [ ... 1,536 ... ]
+"Psychological and Cognitive Aspects.MentalHealth.Anxiety"       -> [ ... 1,536 ... ]
+\end{lstlisting}
+  \begin{itemize}\footnotesize
+    \item 위 경로들은 실제 taxonomy·논문 Fig.\ 2에 나오는 슬롯(잎)이다. 각각이 벡터 \alert{1개}.
+    \item \pc{attribute\_embeddings.pkl} = 이런 슬롯 벡터 \alert{2,297개} 묶음(=\pc{(2297, 1536)} 배열).
+    \item 시드 인물도 같은 방식으로 벡터 1개 $\to$ 이 2,297개와 \alert{코사인 비교}해 가까운/먼 슬롯 판정(모듈 04).
+  \end{itemize}
+  \lead{즉 "2,297개 슬롯 벡터" = \alert{2,297개 속성 경로 문자열을 각각 임베딩한 1,536차원 벡터들}.}
 \end{frame}
 
 \begin{frame}{논문 원본 개요 그림 (Figure 2)}

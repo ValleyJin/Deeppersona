@@ -22,7 +22,7 @@
 \newcommand{\lead}[1]{\vspace*{0.6em}{\setlength{\fboxsep}{9pt}\noindent\colorbox{accent!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textcolor{accent}{\textbf{한눈에}}\hspace{0.6em}#1}}}\par\vspace{1.15em}}
 \newcommand{\intu}[1]{\vspace*{0.2em}{\setlength{\fboxsep}{7pt}\noindent\colorbox{navy!8}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textcolor{navy}{\textbf{쉽게 말하면}}\hspace{0.6em}#1}}}\par\vspace{0.5em}}
 \newcommand{\srcnote}[1]{\vspace{0.35em}\par{\footnotesize\color{navy}$\blacktriangleright$~#1}}
-\newcommand{\pc}[1]{\tikz[baseline=(pcb.base)]{\node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize #1};}}
+\newcommand{\pc}[1]{\tikz[baseline=(pcb.base)]{\node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize\color{ink} #1};}}
 \newcommand{\origfig}[3]{\IfFileExists{#1}{\begin{center}\includegraphics[height=#2]{#1}\\[2pt]{\scriptsize\color{muted}#3}\end{center}}{\begin{center}\setlength{\fboxsep}{8pt}\fbox{\parbox{0.82\textwidth}{\centering\footnotesize\color{muted}[원본 그림 자산 없음 — 저작권상 저장소 미포함]\\[2pt]\texttt{#1}\\[2pt]#3}}\end{center}}}
 \lstdefinestyle{py}{basicstyle=\ttfamily\scriptsize,backgroundcolor=\color{codebg!55},keywordstyle=\color{kw}\bfseries,stringstyle=\color{str},commentstyle=\color{com}\itshape,language=Python,showstringspaces=false,breaklines=true,frame=leftline,framerule=1.4pt,rulecolor=\color{accent},xleftmargin=12pt,aboveskip=3pt,belowskip=2pt,tabsize=2}
 
@@ -151,7 +151,7 @@ def generate_career_info(age):
   \begin{itemize}\footnotesize
     \item \textbf{나이}: \pc{random.randint(7,85)} — 7$\sim$85세 균등. LLM에 맡기면 특정 연령대로 쏠려서 \alert{직접 랜덤}.
     \item \textbf{age\_group}: 나이를 6개 구간으로 매핑(뒤 프롬프트에서 맥락으로 쓰임).
-    \item \textbf{직업}: 18$\sim$65세는 \pc{occupations.json}에서 \pc{random.choice} — 다수문화 기본값 편중 방지.
+    \item \textbf{직업}: 18$\sim$65세는 \pc{occupations\_english.json}에서 \pc{random.choice} — 다수문화 기본값 편중 방지.
     \item \textbf{예외}: 미성년/고령만 LLM이 나이 맞는 "학생/은퇴" 상태 생성(테이블에 없는 케이스).
   \end{itemize}
   \srcnote{\pc{get\_occupations()}는 파일을 한 번 읽고 \pc{\_occupations\_cache}에 캐시(반복 I/O 방지).}

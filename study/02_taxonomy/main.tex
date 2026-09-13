@@ -53,7 +53,7 @@
 \newcommand{\pc}[1]{%
   \tikz[baseline=(pcb.base)]{%
     \node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,%
-          outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize #1};}}
+          outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize\color{ink} #1};}}
 % ===== 원본 논문 그림 삽입 (자산 없으면 안내 박스) — 정책 §2.1 =====
 \newcommand{\origfig}[3]{%
   \IfFileExists{#1}{%
@@ -153,7 +153,7 @@
     \pc{large\_attributes.json} & leaf 2,297 & \alert{최종 트리}. Stage 2가 실제로 쓰는 슬롯 창고 \\
     \pc{attributes\_merged.json} & leaf 4,624 & 병합 \emph{중간 산출물}(아직 덜 정리됨) \\
     \pc{template.json} & 12개 & 허용된 \alert{top-level 카테고리} 정규 목록 \\
-    \pc{occupations.json} & 932줄 & 직업 사전(시드용, 모듈 03) \\
+    \pc{occupations\_english.json} & 932줄 & 직업 사전(시드용, 모듈 03) \\
     \pc{…embeddings.pkl} & 2297$\times$1536 & 슬롯 벡터 캐시(모듈 04) \\
     \bottomrule
   \end{tabular}

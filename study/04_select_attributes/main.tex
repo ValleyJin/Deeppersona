@@ -18,7 +18,7 @@
 \newcommand{\lead}[1]{\vspace*{0.6em}{\setlength{\fboxsep}{9pt}\noindent\colorbox{accent!12}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textcolor{accent}{\textbf{한눈에}}\hspace{0.6em}#1}}}\par\vspace{1.15em}}
 \newcommand{\intu}[1]{\vspace*{0.2em}{\setlength{\fboxsep}{7pt}\noindent\colorbox{navy!8}{\parbox{\dimexpr\textwidth-2\fboxsep\relax}{\textcolor{navy}{\textbf{쉽게 말하면}}\hspace{0.6em}#1}}}\par\vspace{0.5em}}
 \newcommand{\srcnote}[1]{\vspace{0.35em}\par{\footnotesize\color{navy}$\blacktriangleright$~#1}}
-\newcommand{\pc}[1]{\tikz[baseline=(pcb.base)]{\node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize #1};}}
+\newcommand{\pc}[1]{\tikz[baseline=(pcb.base)]{\node[fill=codebg,rounded corners=2pt,inner xsep=3pt,inner ysep=1pt,outer sep=0pt,anchor=base] (pcb) {\ttfamily\footnotesize\color{ink} #1};}}
 \newcommand{\origfig}[3]{\IfFileExists{#1}{\begin{center}\includegraphics[height=#2]{#1}\\[2pt]{\scriptsize\color{muted}#3}\end{center}}{\begin{center}\setlength{\fboxsep}{8pt}\fbox{\parbox{0.82\textwidth}{\centering\footnotesize\color{muted}[원본 그림 자산 없음]\\[2pt]\texttt{#1}\\[2pt]#3}}\end{center}}}
 \lstdefinestyle{py}{basicstyle=\ttfamily\scriptsize,backgroundcolor=\color{codebg!55},keywordstyle=\color{kw}\bfseries,stringstyle=\color{str},commentstyle=\color{com}\itshape,language=Python,showstringspaces=false,breaklines=true,frame=leftline,framerule=1.4pt,rulecolor=\color{accent},xleftmargin=12pt,aboveskip=3pt,belowskip=2pt,tabsize=2}
 
@@ -124,14 +124,14 @@ for i, path in enumerate(self.paths):
   \begin{center}\footnotesize
   \renewcommand{\arraystretch}{1.1}
   \begin{tabular}{@{}lcc@{}}\toprule
-    페르소나 1개당 & 캐시 없음 & 캐시(pkl) \\\midrule
-    슬롯 임베딩 호출 & 2,297번 & \alert{0번}(lookup) \\
-    시드 임베딩 호출 & 1번 & 1번 \\
-    10만 개 생성 비용 & \$23,000 & \alert{\$10} \\
+    \emph{임베딩 한정} & 캐시 없음 & 캐시(pkl) \\\midrule
+    슬롯 임베딩 호출/persona & 2,297번 & \alert{0번}(lookup) \\
+    시드 임베딩 호출/persona & 1번 & 1번 \\
+    10만 명 \emph{임베딩} 비용(추정) & $\approx$\$300 & \alert{$\approx$\$1.5} \\
     \bottomrule
   \end{tabular}
   \end{center}
-  \srcnote{이 pkl이 깨지면(원본 repo 결함) 선택이 전부 실패 $\to$ 빈 프로필(§5, study.md \S6).}
+  \srcnote{$\ast$ \alert{임베딩(ada-002)만}이다. \emph{값 생성(GPT-4o) 비용은 캐시와 무관하게 동일}하며 총비용의 대부분 — pkl은 임베딩 비용만 없앤다. pkl 깨지면 선택 전부 실패$\to$빈 프로필(study.md \S6,8).}
 \end{frame}
 
 \begin{frame}[fragile]{코사인 유사도 — 두 벡터의 \alert{방향} 닮음}
@@ -222,6 +222,37 @@ remaining = target_count - len(selected_paths)
     \end{column}
   \end{columns}
   \lead{같은 직업이어도 mid·far가 달라 \alert{서로 다른 200 슬롯}이 된다(비교가능성 trade-off).}
+\end{frame}
+
+\begin{frame}{왜 사람마다 다른 슬롯? — \alert{비교가능성 vs 다양성}}
+  \intu{"모두 같은 컬럼, 값만 다르게"가 상식 아닌가? 맞지만 그건 전통 방식(Big Five). 논문은 \emph{일부러} 다양성을 택했다.}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize\textbf{왜 2,297개를 고정 안 하나}
+      \begin{itemize}\scriptsize
+        \item 전부 채우면 값생성 \alert{2,297번}/persona(비용 폭발)
+        \item 무관 슬롯 강제("3세 유아에 B2B 협상전략")
+        \item 같은 스키마 $\to$ \alert{다양성·롱테일 소멸}(판박이)
+      \end{itemize}
+      \smallskip
+      \textbf{완전 제각각은 아님 — 하이브리드}
+      \begin{itemize}\scriptsize
+        \item \alert{공통 backbone}: 시드 \pc{base\_info}(나이·성별·위치·직업·값) 동일
+        \item \alert{공통 구조}: top-level 카테고리 공유 \quad\alert{가변}: leaf 200개만 다름
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \scriptsize\textbf{그럼 비교는 어떻게}
+      \begin{itemize}\scriptsize
+        \item 인구학적 분포(공통 base\_info)
+        \item 카테고리별 개수("A는 Career 18칸, B는 24칸")
+        \item Summary 임베딩 유사도(같은 벡터공간)
+        \item \alert{모집단 통계}: 스키마는 달라도 5:3:2 표집분포는 고정 $\to$ 대규모 분포 비교
+        \item 셀 단위가 꼭 필요하면 \alert{Big Five 설문}을 별도로 얹음(논문도 그렇게 함)
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \lead{비교가능성과 다양성은 동시에 못 가진다. 논문은 \alert{다양성}을 택했고, 비교는 \emph{분포·요약·별도 도구}로(study.md \S9).}
 \end{frame}
 
 % ============================================================
